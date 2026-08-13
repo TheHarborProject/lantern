@@ -57,16 +57,30 @@ describe("runComponentScan", () => {
       exportName: "default",
       name: "Banner",
       exportKind: "default",
+      rendering: { intrinsicElements: ["aside"], analyzable: true },
       analysis: { status: "complete", diagnostics: [] },
     });
     expect(index.components[0]?.props).toEqual([
-      { name: "message", type: "string", required: true },
-      { name: "tone", type: '"info" | "warning" | undefined', required: false },
+      { name: "message", type: "string", required: true, origin: "declared", provenance: "src/Banner.tsx" },
+      {
+        name: "tone",
+        type: '"info" | "warning" | undefined',
+        required: false,
+        origin: "declared",
+        provenance: "src/Banner.tsx",
+      },
     ]);
     expect(index.components[1]?.props).toEqual([
-      { name: "disabled", type: "boolean | undefined", required: false },
-      { name: "label", type: "string", required: true },
+      {
+        name: "disabled",
+        type: "boolean | undefined",
+        required: false,
+        origin: "declared",
+        provenance: "src/Button.tsx",
+      },
+      { name: "label", type: "string", required: true, origin: "declared", provenance: "src/Button.tsx" },
     ]);
+    expect(index.components[1]?.rendering).toEqual({ intrinsicElements: ["button"], analyzable: true });
     expect(index.diagnostics).toEqual([]);
   });
 
@@ -109,7 +123,7 @@ describe("runComponentScan", () => {
     ]);
     expect(index.components[0]?.name).toBe("Icon");
     expect(index.components[1]?.props).toEqual([
-      { name: "text", type: "string", required: true },
+      { name: "text", type: "string", required: true, origin: "declared", provenance: "src/Notice.tsx" },
     ]);
   });
 
@@ -142,6 +156,43 @@ describe("runComponentScan", () => {
         message: "Export could not be confirmed as a React component by static analysis.",
       },
     ]);
+  });
+
+  it("separates component-declared props from inherited DOM props with provenance", () => {
+    writeSource(
+      root,
+      "src/Button.tsx",
+      `
+        type ButtonProps = Partial<Pick<HTMLButtonElement, "disabled" | "title">> & {
+          size?: "sm" | "lg";
+          variant?: "default" | "ghost";
+        };
+        export function Button({ size, variant }: ButtonProps) {
+          return <button className={variant}>{size}</button>;
+        }
+      `,
+    );
+
+    const index = runComponentScan(root);
+    const button = index.components[0];
+
+    const declared = button?.props.filter((prop) => prop.origin === "declared") ?? [];
+    const inherited = button?.props.filter((prop) => prop.origin === "inherited") ?? [];
+    expect(declared.map((prop) => prop.name)).toEqual(["size", "variant"]);
+    expect(declared.every((prop) => prop.provenance === "src/Button.tsx")).toBe(true);
+    expect(inherited.map((prop) => prop.name).sort()).toEqual(["disabled", "title"]);
+    expect(inherited.every((prop) => prop.provenance.endsWith(".d.ts"))).toBe(true);
+  });
+
+  it("skips obvious configuration files while retaining ambiguous ones", () => {
+    writeSource(root, "app.config.ts", "export default { plugins: [] };");
+    writeSource(root, "src/tailwind.config.ts", "export default { theme: {} };");
+    writeSource(root, "src/theme.ts", "export const Theme = { color: 'red' };");
+
+    const index = runComponentScan(root);
+
+    expect(index.components).toEqual([]);
+    expect(index.diagnostics.map((diagnostic) => diagnostic.source)).toEqual(["src/theme.ts"]);
   });
 
   it("is deterministic and ignores internal, generated, and test sources", () => {

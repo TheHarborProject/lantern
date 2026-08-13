@@ -46,7 +46,21 @@ Build the regenerable component index from TypeScript and TSX sources under `pro
 lantern audit scan
 ```
 
-The command writes `.lantern/scan.json`. It records component exports, source paths, analyzable props, and explicit diagnostics for exports that cannot be confirmed as React components. It does not create audit files.
+Component discovery builds one canonical internal model and derives several projections from it — sources are never scanned separately per view:
+
+```text
+.lantern/
+├── scan.json                 # human-readable projection
+├── accessibility.json        # accessibility projection
+└── cache/
+    └── component-scan.json   # exhaustive internal model
+```
+
+- `scan.json` is the concise, human-readable view. It lists component identity, source path, export name/kind, **component-owned props only**, and actionable diagnostics. The inherited DOM/React prop surface is intentionally omitted here.
+- `cache/component-scan.json` is the exhaustive machine-readable model. Every prop is resolved (including inherited DOM/React props) and tagged with its `origin` (`declared` vs `inherited`) and portable `provenance`.
+- `accessibility.json` derives accessibility-oriented facts — native/derived semantics, focusability, accessible-name sources, ARIA/state props, and whether runtime analysis may be required. It describes the target component and encodes no rule catalog specific to any accessibility engine.
+
+The command does not create audit files, and obvious configuration files (for example `*.config.ts`) are skipped while genuinely ambiguous sources still produce partial-analysis diagnostics.
 
 ## Quality
 

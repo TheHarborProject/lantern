@@ -1,6 +1,10 @@
 import { relative } from "node:path";
 import type { Command } from "commander";
+import { projectAccessibility } from "../../component-scan/project-accessibility.js";
+import { projectHumanScan } from "../../component-scan/project-human-scan.js";
 import { runComponentScan } from "../../component-scan/run-component-scan.js";
+import { writeAccessibilityIndex } from "../../component-scan/write-accessibility-index.js";
+import { writeComponentScanCache } from "../../component-scan/write-component-scan-cache.js";
 import { writeScanIndex } from "../../component-scan/write-scan-index.js";
 import { loadConfig } from "../../config/load-config.js";
 import { LanternError } from "../../errors/lantern-error.js";
@@ -13,18 +17,23 @@ export function registerAuditCommand(program: Command): void {
 
   audit
     .command("scan")
-    .description("Discover React components and refresh the internal component index.")
+    .description("Discover React components and refresh the scan projections.")
     .action((_options, command: Command) => {
       const globalOptions = command.optsWithGlobals<GlobalCliOptions>();
       try {
         const config = loadConfig({ cwd: process.cwd(), explicitPath: globalOptions.config });
-        const index = runComponentScan(config.project.root);
-        const indexPath = writeScanIndex(config.project.root, index);
-        const diagnosticSuffix = index.diagnostics.length === 0
+        const root = config.project.root;
+
+        const model = runComponentScan(root);
+        writeComponentScanCache(root, model);
+        const humanIndexPath = writeScanIndex(root, projectHumanScan(model));
+        writeAccessibilityIndex(root, projectAccessibility(model));
+
+        const diagnosticSuffix = model.diagnostics.length === 0
           ? ""
-          : `, ${index.diagnostics.length} requiring review`;
+          : `, ${model.diagnostics.length} requiring review`;
         console.log(
-          `Discovered ${index.components.length} components${diagnosticSuffix}. Index: ${relative(process.cwd(), indexPath)}`,
+          `Discovered ${model.components.length} components${diagnosticSuffix}. Index: ${relative(process.cwd(), humanIndexPath)}`,
         );
       } catch (error) {
         if (error instanceof LanternError) {
