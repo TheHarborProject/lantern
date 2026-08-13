@@ -2,12 +2,12 @@ import { relative, sep } from "node:path";
 import ts from "typescript";
 import { ComponentScanError } from "../errors/component-scan-error.js";
 import type {
+  CanonicalComponent,
+  CanonicalComponentModel,
   ComponentAnalysisStatus,
   ComponentExportKind,
-  ComponentProp,
   ComponentScanDiagnostic,
-  ComponentScanIndex,
-  DiscoveredComponent,
+  ResolvedComponentProp,
 } from "../types/component-scan.js";
 import { findSourceFiles } from "./find-source-files.js";
 
@@ -18,8 +18,13 @@ interface ExportCandidate {
   readonly name: string;
 }
 
-/** Discover exported React components and their statically analyzable props. */
-export function runComponentScan(projectRoot: string): ComponentScanIndex {
+/**
+ * Discover exported React components and build the single canonical model that
+ * every projection is derived from. Props are resolved exhaustively and tagged
+ * with provenance so consumers can separate component-owned props from
+ * inherited/resolved DOM and React props.
+ */
+export function runComponentScan(projectRoot: string): CanonicalComponentModel {
   let sourceFiles: string[];
   try {
     sourceFiles = findSourceFiles(projectRoot);
@@ -38,7 +43,7 @@ export function runComponentScan(projectRoot: string): ComponentScanIndex {
     target: ts.ScriptTarget.ES2022,
   });
   const checker = program.getTypeChecker();
-  const components: DiscoveredComponent[] = [];
+  const components: CanonicalComponent[] = [];
   const diagnostics: ComponentScanDiagnostic[] = [];
   const sourceFileSet = new Set(sourceFiles);
 
@@ -49,7 +54,7 @@ export function runComponentScan(projectRoot: string): ComponentScanIndex {
 
     for (const candidate of collectExportCandidates(sourceFile, checker, sourceFileSet)) {
       const source = toPortablePath(relative(projectRoot, candidate.declaration.getSourceFile().fileName));
-      const result = analyzeCandidate(candidate, source, checker);
+      const result = analyzeCandidate(candidate, source, checker, sourceFileSet, projectRoot);
       if ("component" in result) {
         components.push(result.component);
       } else {
@@ -111,7 +116,9 @@ function analyzeCandidate(
   candidate: ExportCandidate,
   source: string,
   checker: ts.TypeChecker,
-): { readonly component: DiscoveredComponent } | { readonly diagnostic: ComponentScanDiagnostic } {
+  sourceFiles: ReadonlySet<string>,
+  projectRoot: string,
+): { readonly component: CanonicalComponent } | { readonly diagnostic: ComponentScanDiagnostic } {
   if (!isReactComponentDeclaration(candidate.declaration)) {
     return {
       diagnostic: {
@@ -122,7 +129,8 @@ function analyzeCandidate(
     };
   }
 
-  const propResult = extractProps(candidate.declaration, checker);
+  const propResult = extractProps(candidate.declaration, checker, sourceFiles, projectRoot);
+  const intrinsicElements = collectIntrinsicElements(candidate.declaration);
   return {
     component: {
       id: `${source}#${candidate.exportName}`,
@@ -131,6 +139,10 @@ function analyzeCandidate(
       name: candidate.name,
       exportKind: candidate.exportKind,
       props: propResult.props,
+      rendering: {
+        intrinsicElements,
+        analyzable: intrinsicElements.length > 0,
+      },
       analysis: {
         status: propResult.status,
         diagnostics: propResult.diagnostics,
@@ -173,11 +185,29 @@ function containsJsx(node: ts.Node | undefined): boolean {
   return found;
 }
 
+/** Collect sorted, unique lowercase intrinsic JSX element tag names. */
+function collectIntrinsicElements(declaration: ts.Declaration): string[] {
+  const names = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const tag = node.tagName.getText();
+      if (/^[a-z]/.test(tag)) {
+        names.add(tag);
+      }
+    }
+    node.forEachChild(visit);
+  };
+  visit(declaration);
+  return [...names].sort(compareText);
+}
+
 function extractProps(
   declaration: ts.Declaration,
   checker: ts.TypeChecker,
+  sourceFiles: ReadonlySet<string>,
+  projectRoot: string,
 ): {
-  readonly props: readonly ComponentProp[];
+  readonly props: readonly ResolvedComponentProp[];
   readonly status: ComponentAnalysisStatus;
   readonly diagnostics: readonly string[];
 } {
@@ -196,16 +226,44 @@ function extractProps(
   }
 
   const type = checker.getTypeAtLocation(propsTypeNode);
-  const props = checker.getPropertiesOfType(type).map((property) => {
-    const location = property.valueDeclaration ?? property.declarations?.[0] ?? propsTypeNode;
+  const props = checker.getPropertiesOfType(type).map((property): ResolvedComponentProp => {
+    const declarationNode = property.valueDeclaration ?? property.declarations?.[0];
+    const location = declarationNode ?? propsTypeNode;
+    const declarationFile = declarationNode?.getSourceFile().fileName;
     return {
       name: property.getName(),
       type: checker.typeToString(checker.getTypeOfSymbolAtLocation(property, location)),
       required: (property.flags & ts.SymbolFlags.Optional) === 0,
+      origin: declarationFile !== undefined && sourceFiles.has(declarationFile) ? "declared" : "inherited",
+      provenance: describeProvenance(declarationFile, propsTypeNode.getSourceFile().fileName, projectRoot),
     };
   }).sort((left, right) => compareText(left.name, right.name));
 
   return { props, status: "complete", diagnostics: [] };
+}
+
+/**
+ * Describe where a prop declaration lives in a machine-stable, portable way:
+ * a project-relative path for owned sources, a `node_modules`-relative hint or
+ * lib basename for inherited declarations.
+ */
+function describeProvenance(
+  declarationFile: string | undefined,
+  fallbackFile: string,
+  projectRoot: string,
+): string {
+  const file = declarationFile ?? fallbackFile;
+  const portable = toPortablePath(file);
+  const moduleMarker = "/node_modules/";
+  const moduleIndex = portable.lastIndexOf(moduleMarker);
+  if (moduleIndex !== -1) {
+    return portable.slice(moduleIndex + moduleMarker.length);
+  }
+  const relativePath = toPortablePath(relative(projectRoot, file));
+  if (relativePath === "" || relativePath.startsWith("..")) {
+    return portable.split("/").at(-1) ?? portable;
+  }
+  return relativePath;
 }
 
 function getPropsParameter(declaration: ts.Declaration): ts.ParameterDeclaration | undefined {
@@ -276,7 +334,7 @@ function toPortablePath(path: string): string {
   return path.split(sep).join("/");
 }
 
-function compareComponents(left: DiscoveredComponent, right: DiscoveredComponent): number {
+function compareComponents(left: CanonicalComponent, right: CanonicalComponent): number {
   return compareText(left.id, right.id);
 }
 

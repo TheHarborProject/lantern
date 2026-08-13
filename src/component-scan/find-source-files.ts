@@ -12,6 +12,22 @@ const IGNORED_DIRECTORIES = new Set([
   "node_modules",
 ]);
 
+/**
+ * Obvious non-component sources safe to skip entirely: tooling configuration
+ * files whose default export is a config object, not a React component. Skipping
+ * them avoids noisy "not a component" diagnostics. Genuinely ambiguous sources
+ * are still scanned so their partial-analysis diagnostics are retained.
+ */
+const CONFIG_FILE_PATTERN = /(?:^|\.)config\.(?:c|m)?tsx?$/;
+const IGNORED_FILE_NAMES = new Set([
+  "vitest.workspace.ts",
+  "vitest.workspace.tsx",
+]);
+
+function isConfigLikeFile(name: string): boolean {
+  return CONFIG_FILE_PATTERN.test(name) || IGNORED_FILE_NAMES.has(name);
+}
+
 /** Find TypeScript sources in stable path order without following symlinks. */
 export function findSourceFiles(root: string): string[] {
   const files: string[] = [];
@@ -42,7 +58,8 @@ function visit(directory: string, files: string[]): void {
       SOURCE_EXTENSIONS.has(extname(entry.name)) &&
       !entry.name.endsWith(".d.ts") &&
       !entry.name.endsWith(".test.ts") &&
-      !entry.name.endsWith(".test.tsx")
+      !entry.name.endsWith(".test.tsx") &&
+      !isConfigLikeFile(entry.name)
     ) {
       files.push(path);
     }
