@@ -1,24 +1,23 @@
 {
-  "name": "@timoogo/snaprun",
+  "name": "@timoogo/lantern",
   "version": "0.3.0",
-  "description": "SnapRun - automated route discovery and screenshot capture for Next.js applications.",
+  "description": "Lantern - accessible component auditing from the command line.",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/timoogo/snaprun.git"
+    "url": "git+https://github.com/timoogo/lantern.git"
   },
-  "homepage": "https://github.com/timoogo/snaprun#readme",
+  "homepage": "https://github.com/timoogo/lantern#readme",
   "bugs": {
-    "url": "https://github.com/timoogo/snaprun/issues"
+    "url": "https://github.com/timoogo/lantern/issues"
   },
   "author": "Timothée Gaultier",
   "keywords": [
-    "nextjs",
+    "accessibility",
     "playwright",
-    "snapshot",
-    "screenshots",
-    "visual-testing",
+    "audit",
+    "components",
     "automation",
     "cli"
   ],
@@ -26,7 +25,7 @@
     "node": ">=20"
   },
   "bin": {
-    "snaprun": "dist/index.js"
+    "lantern": "dist/index.js"
   },
   "files": [
     "dist",
@@ -50,6 +49,7 @@
     "commander": "^12.1.0",
     "dotenv": "^17.4.2",
     "playwright": "^1.47.0",
+    "typescript": "^5.6.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -58,7 +58,6 @@
     "eslint": "^9.11.0",
     "eslint-config-prettier": "^9.1.0",
     "prettier": "^3.3.3",
-    "typescript": "^5.6.2",
     "typescript-eslint": "^8.8.0",
     "vitest": "^2.1.1"
   },

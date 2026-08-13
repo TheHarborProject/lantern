@@ -1,7 +1,7 @@
-import { SnapRunError } from "./snaprun-error.js";
+import { LanternError } from "./lantern-error.js";
 
-/** `startCommand` is missing, or the process launched by SnapRun exits before becoming reachable (RFC-011). */
-export class ApplicationStartFailedError extends SnapRunError {
+/** `startCommand` is missing, or the process launched by Lantern exits before becoming reachable. */
+export class ApplicationStartFailedError extends LanternError {
   readonly code = "APPLICATION_START_FAILED";
 
   constructor(startCommand: string, options?: { readonly cause?: unknown }) {

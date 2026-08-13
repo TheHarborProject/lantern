@@ -1,7 +1,7 @@
 import type { AuthConfig } from "../../types/auth.js";
 
 /**
- * Starter `auth` section written by `snaprun init` (RFC-013 §12). It documents
+ * Starter `auth` section for Lantern. It documents
  * the full authentication structure (login route, selectors, both success
  * strategies, and a representative user) so users discover the available
  * options. Passwords use `${VARIABLE}` placeholders resolved from the

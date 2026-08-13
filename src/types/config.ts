@@ -4,8 +4,7 @@ import type { configSchema } from "../schemas/config.js";
 /**
  * Raw configuration: direct result of Zod validation.
  *
- * Schema defaults (for example `project.autoStart`, `output`, `routes`, and
- * `runs`) are already applied, but paths (`project.root`,
+ * Schema defaults (for example `project.autoStart`) are already applied, but paths (`project.root`,
  * `project.workingDirectory`) stay relative exactly as written in the
  * configuration file.
  */

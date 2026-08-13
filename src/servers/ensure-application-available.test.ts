@@ -51,7 +51,7 @@ describe("ensureApplicationAvailable", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "snaprun-ensure-app-"));
+    dir = mkdtempSync(join(tmpdir(), "lantern-ensure-app-"));
   });
 
   afterEach(() => {
@@ -183,9 +183,9 @@ describe("ensureApplicationAvailable", () => {
       const port = await getFreePort();
       const baseUrl = `http://127.0.0.1:${port}`;
 
-      // Un vrai processus externe, créé en dehors de tout mécanisme SnapRun
+      // Un vrai processus externe, créé en dehors de tout mécanisme Lantern
       // (pas via spawnApplication) : rien ne doit jamais le distinguer d'un
-      // serveur lancé manuellement par l'utilisateur avant `snaprun`.
+      // serveur lancé manuellement par l'utilisateur avant `lantern`.
       const externalServer = spawn(
         "node",
         [
@@ -222,7 +222,7 @@ describe("ensureApplicationAvailable", () => {
         // stopApplication n'est jamais invoquée pour un serveur déjà joignable.
         expect(stopSpy).not.toHaveBeenCalled();
         // Le PID reste le même (aucun redémarrage) et le processus est
-        // toujours vivant : SnapRun ne l'a pas arrêté.
+        // toujours vivant : Lantern ne l'a pas arrêté.
         expect(externalServer.pid).toBe(externalPid);
         expect(isProcessAlive(externalPid)).toBe(true);
       } finally {

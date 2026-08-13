@@ -5,32 +5,28 @@ describe("createProgram", () => {
   it("expose le nom et la description du package", () => {
     const program = createProgram();
 
-    expect(program.name()).toBe("snaprun");
-    expect(program.description()).toContain("SnapRun");
-  });
-
-  it("enregistre la commande scan (RFC-006)", () => {
-    const program = createProgram();
-
-    expect(program.commands.map((command) => command.name())).toContain("scan");
-  });
-
-  it("enregistre la commande init (RFC-013)", () => {
-    const program = createProgram();
-
-    expect(program.commands.map((command) => command.name())).toContain("init");
+    expect(program.name()).toBe("lantern");
+    expect(program.description()).toContain("Lantern");
   });
 
   it("affiche l'aide sans erreur", () => {
     const program = createProgram();
 
     expect(() => program.helpInformation()).not.toThrow();
-    expect(program.helpInformation()).toContain("snaprun");
+    expect(program.helpInformation()).toContain("lantern");
   });
 
-  it("expose --debug comme option globale (RFC-010)", () => {
+  it("expose les options globales de fondation", () => {
     const program = createProgram();
 
     expect(program.options.map((option) => option.long)).toContain("--debug");
+    expect(program.options.map((option) => option.long)).toContain("--config");
+  });
+
+  it("enregistre la commande audit scan", () => {
+    const program = createProgram();
+    const audit = program.commands.find((command) => command.name() === "audit");
+
+    expect(audit?.commands.map((command) => command.name())).toContain("scan");
   });
 });

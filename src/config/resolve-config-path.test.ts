@@ -3,14 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfigNotFoundError } from "../errors/config-not-found-error.js";
-import { SNAPRUN_METADATA_PATH } from "./project-metadata.js";
+import { LANTERN_METADATA_PATH } from "./project-metadata.js";
 import { rememberConfigPath, resolveConfigPath } from "./resolve-config-path.js";
 
 describe("resolveConfigPath", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "snaprun-resolve-config-path-"));
+    dir = mkdtempSync(join(tmpdir(), "lantern-resolve-config-path-"));
   });
 
   afterEach(() => {
@@ -18,7 +18,7 @@ describe("resolveConfigPath", () => {
   });
 
   it("prioritizes an explicit --config path", () => {
-    writeFileSync(join(dir, "snaprun.config.json"), "{}");
+    writeFileSync(join(dir, "lantern.config.json"), "{}");
     writeFileSync(join(dir, "custom.json"), "{}");
 
     expect(resolveConfigPath({ cwd: dir, explicitConfigPath: "./custom.json" })).toEqual({
@@ -37,20 +37,20 @@ describe("resolveConfigPath", () => {
     });
   });
 
-  it("falls back to snaprun.config.json when no remembered config exists", () => {
-    writeFileSync(join(dir, "snaprun.config.json"), "{}");
+  it("falls back to lantern.config.json when no remembered config exists", () => {
+    writeFileSync(join(dir, "lantern.config.json"), "{}");
 
     expect(resolveConfigPath({ cwd: dir })).toEqual({
-      path: join(dir, "snaprun.config.json"),
+      path: join(dir, "lantern.config.json"),
       source: "conventional",
     });
   });
 
-  it("supports .snaprun.json as a conventional file name", () => {
-    writeFileSync(join(dir, ".snaprun.json"), "{}");
+  it("supports .lantern.json as a conventional file name", () => {
+    writeFileSync(join(dir, ".lantern.json"), "{}");
 
     expect(resolveConfigPath({ cwd: dir })).toEqual({
-      path: join(dir, ".snaprun.json"),
+      path: join(dir, ".lantern.json"),
       source: "conventional",
     });
   });
@@ -67,28 +67,28 @@ describe("resolveConfigPath", () => {
   });
 
   it("warns and falls back when the remembered config file was deleted", () => {
-    writeFileSync(join(dir, "snaprun.config.json"), "{}");
+    writeFileSync(join(dir, "lantern.config.json"), "{}");
     rememberConfigPath(dir, join(dir, "missing.json"));
     const warn = vi.fn();
 
     expect(resolveConfigPath({ cwd: dir, onWarning: warn })).toEqual({
-      path: join(dir, "snaprun.config.json"),
+      path: join(dir, "lantern.config.json"),
       source: "conventional",
     });
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("Remembered SnapRun configuration no longer exists"),
+      expect.stringContaining("Remembered Lantern configuration no longer exists"),
     );
   });
 
   it("warns and falls back when project metadata contains invalid JSON", () => {
-    const metadataPath = join(dir, SNAPRUN_METADATA_PATH);
-    mkdirSync(join(dir, ".snaprun"), { recursive: true });
+    const metadataPath = join(dir, LANTERN_METADATA_PATH);
+    mkdirSync(join(dir, ".lantern"), { recursive: true });
     writeFileSync(metadataPath, "{ broken");
-    writeFileSync(join(dir, "snaprun.config.json"), "{}");
+    writeFileSync(join(dir, "lantern.config.json"), "{}");
     const warn = vi.fn();
 
     expect(resolveConfigPath({ cwd: dir, onWarning: warn })).toEqual({
-      path: join(dir, "snaprun.config.json"),
+      path: join(dir, "lantern.config.json"),
       source: "conventional",
     });
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("Ignoring unreadable"));
@@ -100,13 +100,13 @@ describe("resolveConfigPath", () => {
 
   it("stores remembered config paths relative to the project directory", () => {
     mkdirSync(join(dir, "config"), { recursive: true });
-    writeFileSync(join(dir, "config", "snaprun.json"), "{}");
-    rememberConfigPath(dir, join(dir, "config", "snaprun.json"));
+    writeFileSync(join(dir, "config", "lantern.json"), "{}");
+    rememberConfigPath(dir, join(dir, "config", "lantern.json"));
 
-    const metadata = JSON.parse(readFileSync(join(dir, SNAPRUN_METADATA_PATH), "utf-8")) as {
+    const metadata = JSON.parse(readFileSync(join(dir, LANTERN_METADATA_PATH), "utf-8")) as {
       configPath: string;
     };
 
-    expect(metadata.configPath).toBe("./config/snaprun.json");
+    expect(metadata.configPath).toBe("./config/lantern.json");
   });
 });

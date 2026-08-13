@@ -1,5 +1,5 @@
-import { SnapRunError } from "./snaprun-error.js";
+import { LanternError } from "./lantern-error.js";
 
-export class ConfigNotFoundError extends SnapRunError {
+export class ConfigNotFoundError extends LanternError {
   readonly code = "CONFIG_NOT_FOUND";
 }

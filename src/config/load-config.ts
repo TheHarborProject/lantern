@@ -11,7 +11,7 @@ export interface LoadConfigOptions {
 }
 
 /**
- * Locate, read, validate, and resolve the SnapRun configuration.
+ * Locate, read, validate, and resolve the Lantern configuration.
  *
  * @throws {ConfigNotFoundError} No configuration file was found.
  * @throws {ConfigInvalidError} JSON is invalid or does not match the schema.

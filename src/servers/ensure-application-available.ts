@@ -90,7 +90,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Best effort: if the SnapRun process receives SIGINT/SIGTERM while the
+ * Best effort: if the Lantern process receives SIGINT/SIGTERM while the
  * application is running, stop it before letting the signal continue through
  * its normal path (RFC-011: "handle signals"). `once()` ensures Node's
  * default behavior resumes on a second signal delivery.

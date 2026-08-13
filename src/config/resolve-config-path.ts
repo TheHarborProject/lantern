@@ -44,7 +44,7 @@ export function resolveConfigPath(options: ResolveConfigPathOptions): ResolvedCo
     }
 
     options.onWarning?.(
-      `Remembered SnapRun configuration no longer exists: ${rememberedPath}. Falling back to conventional file names.`,
+      `Remembered Lantern configuration no longer exists: ${rememberedPath}. Falling back to conventional file names.`,
     );
   }
 
@@ -57,7 +57,7 @@ export function resolveConfigPath(options: ResolveConfigPathOptions): ResolvedCo
   }
 
   throw new ConfigNotFoundError(
-    `No SnapRun configuration could be found in ${cwd}. Checked remembered metadata and these file names: ${CONFIG_FILE_NAMES.join(", ")}.`,
+    `No Lantern configuration could be found in ${cwd}. Checked remembered metadata and these file names: ${CONFIG_FILE_NAMES.join(", ")}.`,
   );
 }
 

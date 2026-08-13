@@ -30,7 +30,7 @@ function isProcessAlive(pid: number): boolean {
 }
 
 describe("stopApplication", () => {
-  it("arrête un processus en cours d'exécution (le processus créé par SnapRun)", async () => {
+  it("arrête un processus en cours d'exécution (le processus créé par Lantern)", async () => {
     const app = spawnApplication('node -e "setInterval(() => {}, 1000)"', process.cwd());
     const pid = app.pid;
     expect(pid).toBeDefined();

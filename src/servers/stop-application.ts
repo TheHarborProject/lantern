@@ -4,7 +4,7 @@ const GRACE_PERIOD_MS = 3_000;
 const POLL_INTERVAL_MS = 20;
 
 /**
- * Stop an application launched by SnapRun (RFC-011), never an external
+ * Stop an application launched by Lantern, never an external
  * server. This function is only called on a `RunningApplication` actually
  * created by {@link spawnApplication}. Send `SIGTERM` first for graceful
  * shutdown, then `SIGKILL` after a short grace period if the process is

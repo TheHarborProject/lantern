@@ -14,7 +14,7 @@ describe("resolveEnvValue", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "snaprun-resolve-env-"));
+    dir = mkdtempSync(join(tmpdir(), "lantern-resolve-env-"));
     vi.mocked(readFileSync).mockClear();
   });
 
@@ -112,16 +112,16 @@ describe("resolveEnvValue", () => {
   });
 
   it("ne modifie jamais process.env", () => {
-    writeFileSync(join(dir, ".env"), "SNAPRUN_TEST_ISOLATION_VAR=from-file");
+    writeFileSync(join(dir, ".env"), "LANTERN_TEST_ISOLATION_VAR=from-file");
     const before = { ...process.env };
 
-    const result = resolveEnvValue("${SNAPRUN_TEST_ISOLATION_VAR}", {
+    const result = resolveEnvValue("${LANTERN_TEST_ISOLATION_VAR}", {
       workingDirectory: dir,
       processEnv: {},
     });
 
     expect(result).toBe("from-file");
     expect(process.env).toEqual(before);
-    expect(process.env["SNAPRUN_TEST_ISOLATION_VAR"]).toBeUndefined();
+    expect(process.env["LANTERN_TEST_ISOLATION_VAR"]).toBeUndefined();
   });
 });

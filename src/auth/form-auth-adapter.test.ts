@@ -119,7 +119,7 @@ describe("FormAuthAdapter", () => {
   it("lève ENV_VARIABLE_MISSING si le mot de passe référence une variable absente (secret absent)", async () => {
     const adapter = new FormAuthAdapter({
       auth: authConfig({
-        users: { member: { email: VALID_EMAIL, password: "${SNAPRUN_TEST_MISSING_SECRET}" } },
+        users: { member: { email: VALID_EMAIL, password: "${LANTERN_TEST_MISSING_SECRET}" } },
       }),
       baseUrl: server.baseUrl,
       workingDirectory: process.cwd(),

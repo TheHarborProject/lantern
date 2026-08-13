@@ -9,7 +9,7 @@ describe("createConfigFile", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "snaprun-create-config-"));
+    dir = mkdtempSync(join(tmpdir(), "lantern-create-config-"));
   });
 
   afterEach(() => {
@@ -17,7 +17,7 @@ describe("createConfigFile", () => {
   });
 
   it("écrit un JSON lisible avec deux espaces et un saut de ligne final", () => {
-    const filePath = join(dir, "snaprun.config.json");
+    const filePath = join(dir, "lantern.config.json");
 
     createConfigFile(filePath, { project: { root: "." }, routes: [] });
 
@@ -28,7 +28,7 @@ describe("createConfigFile", () => {
   });
 
   it("refuse d'écraser un fichier existant (RFC-013 §13)", () => {
-    const filePath = join(dir, "snaprun.config.json");
+    const filePath = join(dir, "lantern.config.json");
     writeFileSync(filePath, "{}");
 
     expect(() => createConfigFile(filePath, { project: {} })).toThrow(ConfigAlreadyExistsError);
@@ -36,7 +36,7 @@ describe("createConfigFile", () => {
   });
 
   it("expose le code CONFIG_ALREADY_EXISTS", () => {
-    const filePath = join(dir, "snaprun.config.json");
+    const filePath = join(dir, "lantern.config.json");
     writeFileSync(filePath, "{}");
 
     try {

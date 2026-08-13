@@ -1,7 +1,7 @@
-import { SnapRunError } from "./snaprun-error.js";
+import { LanternError } from "./lantern-error.js";
 
 /** The message never includes the email or password used, only the user id. */
-export class AuthenticationFailedError extends SnapRunError {
+export class AuthenticationFailedError extends LanternError {
   readonly code = "AUTHENTICATION_FAILED";
   readonly userId: string;
 

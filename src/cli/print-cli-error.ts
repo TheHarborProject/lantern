@@ -1,10 +1,10 @@
-import { SnapRunError } from "../errors/snaprun-error.js";
+import { LanternError } from "../errors/lantern-error.js";
 
 /**
  * Print an application error (RFC-010): the message only by default, or the
  * full stack trace and original cause with `--debug`.
  */
-export function printCliError(error: SnapRunError, debug: boolean): void {
+export function printCliError(error: LanternError, debug: boolean): void {
   console.error(error.message);
 
   if (debug) {
