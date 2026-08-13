@@ -62,6 +62,32 @@ Component discovery builds one canonical internal model and derives several proj
 
 The command does not create audit files, and obvious configuration files (for example `*.config.ts`) are skipped while genuinely ambiguous sources still produce partial-analysis diagnostics.
 
+## Isolated Component Runtime
+
+Lantern can mount a single discovered component in a real browser without a Storybook file or a per-component harness. It generates a temporary render harness it fully owns, bundles the component (with React resolved from the project), serves a minimal page with a `#root` mount point, and drives it with Playwright so audit engines can inspect the rendered DOM:
+
+```text
+Component source → generated harness → Lantern runtime → Playwright → rendered DOM → audit engines
+```
+
+The harness is never written into the project, and a render failure raises an actionable error stating what is missing (source, dependency, provider, or global style).
+
+Genuinely global context is configured once for the project under `isolation`, so components never redeclare it:
+
+```json
+{
+  "project": { "root": "." },
+  "isolation": {
+    "globalCss": ["src/app/globals.css"],
+    "wrapper": "lantern/isolation-wrapper.tsx",
+    "wrapperExport": "default"
+  }
+}
+```
+
+- `globalCss` — stylesheets inlined into every isolation page.
+- `wrapper` / `wrapperExport` — a shared wrapper module (compose `ThemeProvider`, i18n, and context providers there) applied around every mounted component.
+
 ## Quality
 
 ```bash
