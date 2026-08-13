@@ -6,7 +6,7 @@ import { parse } from "dotenv";
  * Read and parse a `.env` file. Returns `{}` when the file does not exist.
  *
  * Parsing delegates to `dotenv.parse()` (RFC-003, review follow-up): only
- * the parsing API is used, never `dotenv.config()`, so SnapRun keeps full
+ * the parsing API is used, never `dotenv.config()`, so Lantern keeps full
  * control over precedence and never writes into `process.env`
  * (`process.env` > `.env.local` > `.env`).
  */

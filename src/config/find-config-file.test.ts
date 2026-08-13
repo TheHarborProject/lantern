@@ -9,32 +9,24 @@ describe("findConfigFile", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "snaprun-find-config-"));
+    dir = mkdtempSync(join(tmpdir(), "lantern-find-config-"));
   });
 
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("détecte snaprun.config.json en priorité", () => {
-    writeFileSync(join(dir, "snaprun.config.json"), "{}");
-    writeFileSync(join(dir, "snapshot.config.json"), "{}");
-    writeFileSync(join(dir, "settings.json"), "{}");
+  it("détecte lantern.config.json en priorité", () => {
+    writeFileSync(join(dir, "lantern.config.json"), "{}");
+    writeFileSync(join(dir, ".lantern.json"), "{}");
 
-    expect(findConfigFile({ cwd: dir })).toBe(join(dir, "snaprun.config.json"));
+    expect(findConfigFile({ cwd: dir })).toBe(join(dir, "lantern.config.json"));
   });
 
-  it("détecte snapshot.config.json si snaprun.config.json est absent", () => {
-    writeFileSync(join(dir, "snapshot.config.json"), "{}");
-    writeFileSync(join(dir, "settings.json"), "{}");
+  it("détecte .lantern.json si lantern.config.json est absent", () => {
+    writeFileSync(join(dir, ".lantern.json"), "{}");
 
-    expect(findConfigFile({ cwd: dir })).toBe(join(dir, "snapshot.config.json"));
-  });
-
-  it("détecte settings.json en dernier recours", () => {
-    writeFileSync(join(dir, "settings.json"), "{}");
-
-    expect(findConfigFile({ cwd: dir })).toBe(join(dir, "settings.json"));
+    expect(findConfigFile({ cwd: dir })).toBe(join(dir, ".lantern.json"));
   });
 
   it("lève CONFIG_NOT_FOUND si aucun fichier n'est trouvé", () => {
@@ -42,7 +34,7 @@ describe("findConfigFile", () => {
   });
 
   it("priorise le chemin explicite (--config) sur la détection automatique", () => {
-    writeFileSync(join(dir, "snaprun.config.json"), "{}");
+    writeFileSync(join(dir, "lantern.config.json"), "{}");
     writeFileSync(join(dir, "custom.json"), "{}");
 
     const result = findConfigFile({ cwd: dir, explicitPath: "custom.json" });

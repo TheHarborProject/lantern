@@ -26,7 +26,6 @@ function validConfig(
 ): Record<string, unknown> {
   return {
     project: overrides.project ?? validProject(),
-    output: { directory: "./snapshots", fullPage: true },
     auth: {
       loginRoute: "/sign-in",
       selectors: {
@@ -37,8 +36,6 @@ function validConfig(
       successUrl: "/dashboard",
       users: {},
     },
-    routes: [],
-    runs: [],
   };
 }
 
@@ -46,7 +43,7 @@ describe("loadConfig", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "snaprun-load-config-"));
+    dir = mkdtempSync(join(tmpdir(), "lantern-load-config-"));
   });
 
   afterEach(() => {
@@ -54,19 +51,19 @@ describe("loadConfig", () => {
   });
 
   it("charge une configuration valide et résout project.root/workingDirectory sur '.'", () => {
-    writeFileSync(join(dir, "snaprun.config.json"), JSON.stringify(validConfig()));
+    writeFileSync(join(dir, "lantern.config.json"), JSON.stringify(validConfig()));
 
     const result = loadConfig({ cwd: dir });
 
     expect(result.project.root).toBe(dir);
     expect(result.project.workingDirectory).toBe(dir);
-    expect(result.configFilePath).toBe(join(dir, "snaprun.config.json"));
+    expect(result.configFilePath).toBe(join(dir, "lantern.config.json"));
   });
 
   it("résout project.root relatif au répertoire du fichier de configuration", () => {
     mkdirSync(join(dir, "app"), { recursive: true });
     writeFileSync(
-      join(dir, "snaprun.config.json"),
+      join(dir, "lantern.config.json"),
       JSON.stringify(validConfig({ project: validProject({ root: "./app" }) })),
     );
 
@@ -79,7 +76,7 @@ describe("loadConfig", () => {
   it("résout project.workingDirectory relatif à project.root quand il est fourni", () => {
     mkdirSync(join(dir, "app", "web"), { recursive: true });
     writeFileSync(
-      join(dir, "snaprun.config.json"),
+      join(dir, "lantern.config.json"),
       JSON.stringify(
         validConfig({ project: validProject({ root: "./app", workingDirectory: "./web" }) }),
       ),
@@ -92,10 +89,10 @@ describe("loadConfig", () => {
   });
 
   it("accepte project.root absolu", () => {
-    const absoluteRoot = mkdtempSync(join(tmpdir(), "snaprun-absolute-root-"));
+    const absoluteRoot = mkdtempSync(join(tmpdir(), "lantern-absolute-root-"));
 
     writeFileSync(
-      join(dir, "snaprun.config.json"),
+      join(dir, "lantern.config.json"),
       JSON.stringify(validConfig({ project: validProject({ root: absoluteRoot }) })),
     );
 
@@ -107,7 +104,7 @@ describe("loadConfig", () => {
   });
 
   it("priorise --config sur la détection automatique", () => {
-    writeFileSync(join(dir, "snaprun.config.json"), JSON.stringify(validConfig()));
+    writeFileSync(join(dir, "lantern.config.json"), JSON.stringify(validConfig()));
     mkdirSync(join(dir, "custom-root"), { recursive: true });
     writeFileSync(
       join(dir, "custom.json"),
@@ -122,15 +119,15 @@ describe("loadConfig", () => {
 
   it("remembers a valid explicit config path after loading it successfully", () => {
     mkdirSync(join(dir, "config"), { recursive: true });
-    writeFileSync(join(dir, "config", "snaprun.json"), JSON.stringify(validConfig()));
+    writeFileSync(join(dir, "config", "lantern.json"), JSON.stringify(validConfig()));
 
-    loadConfig({ cwd: dir, explicitPath: "./config/snaprun.json" });
+    loadConfig({ cwd: dir, explicitPath: "./config/lantern.json" });
 
-    const metadata = JSON.parse(readFileSync(join(dir, ".snaprun", "project.json"), "utf-8")) as {
+    const metadata = JSON.parse(readFileSync(join(dir, ".lantern", "project.json"), "utf-8")) as {
       configPath: string;
     };
 
-    expect(metadata.configPath).toBe("./config/snaprun.json");
+    expect(metadata.configPath).toBe("./config/lantern.json");
   });
 
   it("lève CONFIG_NOT_FOUND si aucun fichier de configuration n'existe", () => {
@@ -138,7 +135,7 @@ describe("loadConfig", () => {
   });
 
   it("lève CONFIG_INVALID sur un JSON malformé", () => {
-    writeFileSync(join(dir, "snaprun.config.json"), "{ invalide");
+    writeFileSync(join(dir, "lantern.config.json"), "{ invalide");
 
     try {
       loadConfig({ cwd: dir });
@@ -153,19 +150,19 @@ describe("loadConfig", () => {
   it("lève CONFIG_INVALID sur une structure ne respectant pas le schéma", () => {
     const config = validConfig();
     config["output"] = { fullPage: "oui" };
-    writeFileSync(join(dir, "snaprun.config.json"), JSON.stringify(config));
+    writeFileSync(join(dir, "lantern.config.json"), JSON.stringify(config));
 
     expect(() => loadConfig({ cwd: dir })).toThrow(ConfigInvalidError);
   });
 
   it("lève CONFIG_INVALID si la section 'project' est absente", () => {
-    writeFileSync(join(dir, "snaprun.config.json"), JSON.stringify({}));
+    writeFileSync(join(dir, "lantern.config.json"), JSON.stringify({}));
 
     expect(() => loadConfig({ cwd: dir })).toThrow(ConfigInvalidError);
   });
 
   it("charge une configuration réellement minimale ({ project: {} }) avec toutes les valeurs par défaut", () => {
-    writeFileSync(join(dir, "snaprun.config.json"), JSON.stringify({ project: {} }));
+    writeFileSync(join(dir, "lantern.config.json"), JSON.stringify({ project: {} }));
 
     const result = loadConfig({ cwd: dir });
 
@@ -174,15 +171,12 @@ describe("loadConfig", () => {
     expect(result.project.autoStart).toBe(false);
     expect(result.project.baseUrl).toBeUndefined();
     expect(result.project.startCommand).toBeUndefined();
-    expect(result.output).toEqual({ directory: "./snapshots", fullPage: true, structure: "flat" });
-    expect(result.routes).toEqual([]);
-    expect(result.runs).toEqual([]);
     expect(result.auth).toBeUndefined();
   });
 
-  it("charge une configuration minimale suffisante pour un scan (project.baseUrl seul)", () => {
+  it("charge une configuration minimale avec project.baseUrl seul", () => {
     writeFileSync(
-      join(dir, "snaprun.config.json"),
+      join(dir, "lantern.config.json"),
       JSON.stringify({ project: { baseUrl: "http://localhost:3000" } }),
     );
 

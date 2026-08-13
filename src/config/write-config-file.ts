@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
  */
 export function writeConfigFile(filePath: string, data: unknown): void {
   const content = `${JSON.stringify(data, null, 2)}\n`;
-  const tempPath = join(dirname(filePath), `.snaprun-config-${process.pid}-${Date.now()}.tmp`);
+  const tempPath = join(dirname(filePath), `.lantern-config-${process.pid}-${Date.now()}.tmp`);
 
   writeFileSync(tempPath, content, "utf-8");
   renameSync(tempPath, filePath);

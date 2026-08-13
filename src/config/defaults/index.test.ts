@@ -3,33 +3,15 @@ import { configSchema } from "../../schemas/config.js";
 import { createDefaultConfig } from "./index.js";
 
 describe("createDefaultConfig", () => {
-  it("produit une configuration valide selon configSchema (RFC-013 §14)", () => {
+  it("produit une configuration valide selon configSchema", () => {
     expect(() => configSchema.parse(createDefaultConfig())).not.toThrow();
   });
 
-  it("expose tous les domaines de configuration supportés", () => {
+  it("expose les domaines de fondation supportés", () => {
     const config = createDefaultConfig();
 
     expect(config.project).toBeDefined();
-    expect(config.output).toBeDefined();
     expect(config.auth).toBeDefined();
-    expect(config.routes).toBeDefined();
-    expect(config.runs).toBeDefined();
-    expect(config.execution).toBeDefined();
-  });
-
-  it("expose execution (concurrency + collisionStrategy) dans la configuration générée (RFC-014/014.5)", () => {
-    expect(createDefaultConfig().execution).toEqual({
-      concurrency: 4,
-      collisionStrategy: "prompt",
-    });
-  });
-
-  it("n'invente aucune route ni run (routes et runs vides, RFC-013 §11)", () => {
-    const config = createDefaultConfig();
-
-    expect(config.routes).toEqual([]);
-    expect(config.runs).toEqual([]);
   });
 
   it("expose chaque champ project supporté", () => {
@@ -58,7 +40,7 @@ describe("createDefaultConfig", () => {
 
     expect(first).not.toBe(second);
     expect(first.auth).not.toBe(second.auth);
-    first.routes.push({ id: "x", path: "/x", enableSnapshot: true });
-    expect(second.routes).toEqual([]);
+    first.project.root = "changed";
+    expect(second.project.root).toBe(".");
   });
 });

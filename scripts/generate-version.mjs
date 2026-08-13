@@ -3,11 +3,11 @@
  * Generates `src/generated/version.ts` from `package.json`.
  *
  * This script runs at build time, never at CLI runtime, to avoid reading
- * `package.json` from disk every time `snaprun` starts.
+ * `package.json` from disk every time `lantern` starts.
  *
  * The npm package name and CLI binary name are intentionally distinct:
- * - npm package: @timoogo/snaprun
- * - CLI command: snaprun
+ * - npm package: @timoogo/lantern
+ * - CLI command: lantern
  */
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

@@ -8,7 +8,7 @@ describe("loadFileEnv", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "snaprun-load-file-env-"));
+    dir = mkdtempSync(join(tmpdir(), "lantern-load-file-env-"));
   });
 
   afterEach(() => {

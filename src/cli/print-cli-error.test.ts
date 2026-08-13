@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RouteNotFoundError } from "../errors/route-not-found-error.js";
+import { ConfigNotFoundError } from "../errors/config-not-found-error.js";
 import { printCliError } from "./print-cli-error.js";
 
 describe("printCliError", () => {
@@ -14,18 +14,18 @@ describe("printCliError", () => {
   });
 
   it("affiche uniquement le message sans --debug", () => {
-    printCliError(new RouteNotFoundError("/absent"), false);
+    printCliError(new ConfigNotFoundError("Configuration not found"), false);
 
     expect(errorSpy).toHaveBeenCalledTimes(1);
     const firstArg = errorSpy.mock.calls[0]?.[0];
-    expect(String(firstArg)).toContain("/absent");
+    expect(String(firstArg)).toContain("Configuration not found");
   });
 
   it("affiche également la pile d'appels avec --debug", () => {
-    printCliError(new RouteNotFoundError("/absent"), true);
+    printCliError(new ConfigNotFoundError("Configuration not found"), true);
 
     expect(errorSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
     const stackArg = errorSpy.mock.calls[1]?.[0];
-    expect(String(stackArg)).toContain("RouteNotFoundError");
+    expect(String(stackArg)).toContain("ConfigNotFoundError");
   });
 });

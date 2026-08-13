@@ -5,11 +5,10 @@ import { z } from "zod";
  * Every field has a safe runtime default except `baseUrl` and `startCommand`:
  * - `root` defaults to `"."`;
  * - `workingDirectory` defaults to `"."`, so it resolves from `root` when omitted;
- * - `autoStart` defaults to `false` so SnapRun never starts a process implicitly;
+ * - `autoStart` defaults to `false` so Lantern never starts a process implicitly;
  * - `baseUrl` and `startCommand` stay optional during configuration loading:
  *   whether they are required depends on the command being executed
- *   (snapshot capture needs `baseUrl`, auto-start needs `startCommand`) and
- *   is validated by those commands instead of here.
+ *   whether they are required depends on the future audit command.
  */
 export const projectSchema = z.object({
   root: z.string().default("."),

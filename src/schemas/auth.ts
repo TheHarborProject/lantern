@@ -22,7 +22,7 @@ const userCredentialsSchema = z.object({
  * authentication is valid). When present, its full structure is required.
  * The login success strategy (`successUrl` and/or `successSelector`) must
  * define at least one success criterion (RFC-007): at least one of them must
- * allow SnapRun to determine that login succeeded.
+ * allow Lantern to determine that login succeeded.
  */
 export const authSchema = z
   .object({
@@ -37,7 +37,7 @@ export const authSchema = z
       ctx.addIssue({
         code: "custom",
         message:
-          "auth.successUrl or auth.successSelector must be defined so SnapRun can detect a successful login.",
+          "auth.successUrl or auth.successSelector must be defined so Lantern can detect a successful login.",
         path: ["successUrl"],
       });
     }

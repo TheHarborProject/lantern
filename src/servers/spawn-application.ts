@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 
-/** Application launched by SnapRun (RFC-011), with exit state and captured output. */
+/** Application launched by Lantern, with exit state and captured output. */
 export interface RunningApplication {
   readonly pid: number | undefined;
   hasExited(): boolean;

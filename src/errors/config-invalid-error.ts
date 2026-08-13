@@ -1,5 +1,5 @@
-import { SnapRunError } from "./snaprun-error.js";
+import { LanternError } from "./lantern-error.js";
 
-export class ConfigInvalidError extends SnapRunError {
+export class ConfigInvalidError extends LanternError {
   readonly code = "CONFIG_INVALID";
 }

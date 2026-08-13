@@ -8,7 +8,7 @@ describe("writeConfigFile", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "snaprun-write-config-"));
+    dir = mkdtempSync(join(tmpdir(), "lantern-write-config-"));
   });
 
   afterEach(() => {
@@ -16,7 +16,7 @@ describe("writeConfigFile", () => {
   });
 
   it("écrit les données en JSON lisible", () => {
-    const filePath = join(dir, "snaprun.config.json");
+    const filePath = join(dir, "lantern.config.json");
 
     writeConfigFile(filePath, { project: { root: "." }, routes: [] });
 
@@ -27,7 +27,7 @@ describe("writeConfigFile", () => {
   });
 
   it("écrase un fichier existant", () => {
-    const filePath = join(dir, "snaprun.config.json");
+    const filePath = join(dir, "lantern.config.json");
     writeFileSync(filePath, JSON.stringify({ project: { root: "." }, routes: [] }));
 
     writeConfigFile(filePath, { project: { root: "." }, routes: [{ id: "a" }] });
@@ -39,10 +39,10 @@ describe("writeConfigFile", () => {
   });
 
   it("ne laisse aucun fichier temporaire résiduel", () => {
-    const filePath = join(dir, "snaprun.config.json");
+    const filePath = join(dir, "lantern.config.json");
 
     writeConfigFile(filePath, { project: { root: "." }, routes: [] });
 
-    expect(readdirSync(dir)).toEqual(["snaprun.config.json"]);
+    expect(readdirSync(dir)).toEqual(["lantern.config.json"]);
   });
 });
