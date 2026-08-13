@@ -1,0 +1,76 @@
+{
+  "project": {
+    "root": ".",
+    "baseUrl": "http://localhost:3000",
+    "startCommand": "pnpm dev",
+    "autoStart": true
+  },
+  "output": {
+    "directory": "./snapshots",
+    "fullPage": true
+  },
+  "execution": {
+    "concurrency": 4,
+    "collisionStrategy": "prompt"
+  },
+  "auth": {
+    "loginRoute": "/login",
+    "selectors": {
+      "email": "input[name='email']",
+      "password": "input[name='password']",
+      "submit": "button[type='submit']"
+    },
+    "successUrl": "**/dashboard",
+    "users": {
+      "member": {
+        "email": "member@example.com",
+        "password": "${MEMBER_PASSWORD}"
+      },
+      "admin": {
+        "email": "admin@example.com",
+        "password": "${ADMIN_PASSWORD}"
+      }
+    }
+  },
+  "routes": [
+    {
+      "id": "home",
+      "path": "/",
+      "enableSnapshot": true
+    },
+    {
+      "id": "member-calendar",
+      "path": "/member/calendar",
+      "enableSnapshot": true,
+      "user": "member"
+    },
+    {
+      "id": "member-stay",
+      "path": "/member/stays/[stayId]",
+      "isDynamic": true,
+      "parameters": { "stayId": "seed-stay-123" },
+      "enableSnapshot": true,
+      "user": "member"
+    },
+    {
+      "id": "admin-dashboard",
+      "path": "/admin",
+      "enableSnapshot": true,
+      "user": "admin"
+    }
+  ],
+  "runs": [
+    {
+      "runName": "member",
+      "user": "member",
+      "order": 1,
+      "routes": ["member-calendar", "member-stay"]
+    },
+    {
+      "runName": "admin",
+      "user": "admin",
+      "order": 2,
+      "routes": ["admin-dashboard"]
+    }
+  ]
+}
