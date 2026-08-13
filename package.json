@@ -1,0 +1,68 @@
+{
+  "name": "@timoogo/snaprun",
+  "version": "0.3.0",
+  "description": "SnapRun - automated route discovery and screenshot capture for Next.js applications.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/timoogo/snaprun.git"
+  },
+  "homepage": "https://github.com/timoogo/snaprun#readme",
+  "bugs": {
+    "url": "https://github.com/timoogo/snaprun/issues"
+  },
+  "author": "Timothée Gaultier",
+  "keywords": [
+    "nextjs",
+    "playwright",
+    "snapshot",
+    "screenshots",
+    "visual-testing",
+    "automation",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "snaprun": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "generate:version": "node scripts/generate-version.mjs",
+    "prepare": "pnpm run generate:version",
+    "prebuild": "pnpm run generate:version",
+    "pretypecheck": "pnpm run generate:version",
+    "prelint": "pnpm run generate:version",
+    "pretest": "pnpm run generate:version",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "dotenv": "^17.4.2",
+    "playwright": "^1.47.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.11.0",
+    "@types/node": "^20.14.0",
+    "eslint": "^9.11.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.2",
+    "typescript-eslint": "^8.8.0",
+    "vitest": "^2.1.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
