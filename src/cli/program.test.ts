@@ -29,4 +29,10 @@ describe("createProgram", () => {
 
     expect(audit?.commands.map((command) => command.name())).toContain("scan");
   });
+
+  it("enregistre la commande lint (RFC-007)", () => {
+    const program = createProgram();
+
+    expect(program.commands.map((command) => command.name())).toContain("lint");
+  });
 });
