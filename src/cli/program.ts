@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { CLI_DESCRIPTION, CLI_NAME, CLI_VERSION } from "../generated/version.js";
 import { registerAuditCommand } from "./commands/audit.js";
+import { registerLintCommand } from "./commands/lint.js";
 
 /** Build the Lantern CLI program. */
 export function createProgram(): Command {
@@ -20,10 +21,12 @@ Examples:
   lantern --version
   lantern --config ./lantern.config.json
   lantern audit scan
+  lantern lint
 `,
     );
 
   registerAuditCommand(program);
+  registerLintCommand(program);
 
   return program;
 }

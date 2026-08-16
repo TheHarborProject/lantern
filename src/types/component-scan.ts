@@ -124,3 +124,16 @@ export interface AccessibilityIndex {
   readonly version: 1;
   readonly components: readonly AccessibilityComponent[];
 }
+
+/**
+ * Internal, generated change-detection metadata written to
+ * `.lantern/cache/scan-state.json` (RFC-007). Used only to decide whether
+ * `lantern lint`'s default incremental targeting can safely reuse the cached
+ * canonical component model instead of rescanning. Never a place for durable
+ * user decisions — those live in `lantern.config.json`.
+ */
+export interface ScanStateCache {
+  readonly version: 1;
+  /** Portable, project-relative source path → content hash, as of the last successful scan. */
+  readonly sourceHashes: Readonly<Record<string, string>>;
+}
