@@ -80,6 +80,14 @@ describe("mergeFragment", () => {
     expect(merged.ignorePatterns).toEqual(["coverage/"]);
   });
 
+  it("merges fixtures by name, later layer replacing a whole named list", () => {
+    const merged = mergeFragment(base({ fixtures: { users: ["guest"] } }), {
+      fixtures: { users: ["admin"], sizes: ["sm", "lg"] },
+    });
+
+    expect(merged.fixtures).toEqual({ users: ["admin"], sizes: ["sm", "lg"] });
+  });
+
   it("carries the base extends list through unchanged", () => {
     const merged = mergeFragment(base({ extends: ["lantern:recommended"] }), {
       rules: { "lantern/focus-visible": "off" },
