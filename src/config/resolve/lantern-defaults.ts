@@ -9,7 +9,9 @@ import type { ResolvedLanternConfig } from "../../types/config.js";
  *   promise of automated proof;
  * - only the `static` engine enabled (the discovery Lantern already performs);
  * - no rules enabled by default — rules are opted into via `extends`
- *   (e.g. `lantern:recommended`) or listed explicitly.
+ *   (e.g. `lantern:recommended`) or listed explicitly;
+ * - no fixtures declared by default (RFC-006) — fixtures are reusable named
+ *   value lists a project defines only once it needs them.
  *
  * This value is treated as immutable; resolution never mutates it in place.
  */
@@ -22,4 +24,5 @@ export const LANTERN_DEFAULTS: ResolvedLanternConfig = {
   components: {},
   overrides: [],
   ignorePatterns: [],
+  fixtures: {},
 };

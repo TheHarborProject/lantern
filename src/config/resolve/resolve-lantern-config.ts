@@ -30,6 +30,7 @@ export function resolveLanternConfig(raw: RawConfig): ResolvedLanternConfig {
     components: raw.components,
     overrides: raw.overrides,
     ignorePatterns: raw.ignorePatterns,
+    fixtures: raw.fixtures,
   };
   resolved = mergeFragment(resolved, projectFragment);
 

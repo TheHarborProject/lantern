@@ -37,4 +37,28 @@ describe("componentsSchema", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("accepts a prop that references a fixture instead of inline values", () => {
+    const parsed = componentsSchema.parse({ Avatar: { props: { user: { fixture: "users" } } } });
+
+    expect(parsed).toEqual({ Avatar: { props: { user: { fixture: "users" } } } });
+  });
+
+  it("rejects a prop configuring both values and a fixture", () => {
+    const result = componentsSchema.safeParse({
+      Avatar: { props: { user: { values: ["guest"], fixture: "users" } } },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a component explicitly marked as skipped", () => {
+    expect(componentsSchema.parse({ Avatar: { skip: true } })).toEqual({ Avatar: { skip: true } });
+  });
+
+  it("rejects a non-boolean skip value", () => {
+    const result = componentsSchema.safeParse({ Avatar: { skip: "yes" } });
+
+    expect(result.success).toBe(false);
+  });
 });

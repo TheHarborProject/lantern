@@ -17,6 +17,7 @@ describe("resolveLanternConfig", () => {
       components: {},
       overrides: [],
       ignorePatterns: [],
+      fixtures: {},
     });
   });
 
@@ -91,5 +92,18 @@ describe("resolveLanternConfig", () => {
     expect(resolveLanternConfig(raw).components).toEqual({
       Avatar: { props: { user: { values: ["guest", "member"] } } },
     });
+  });
+
+  it("resolves named fixtures declared at the project level", () => {
+    const raw = configSchema.parse({
+      project: {},
+      fixtures: { users: ["guest", "member"] },
+      components: { Avatar: { props: { user: { fixture: "users" } } } },
+    });
+
+    const resolved = resolveLanternConfig(raw);
+
+    expect(resolved.fixtures).toEqual({ users: ["guest", "member"] });
+    expect(resolved.components["Avatar"]?.props?.["user"]).toEqual({ fixture: "users" });
   });
 });

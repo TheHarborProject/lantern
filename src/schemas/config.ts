@@ -3,6 +3,7 @@ import { authSchema } from "./auth.js";
 import { componentsSchema } from "./components.js";
 import { enginesSchema } from "./engines.js";
 import { extendsSchema } from "./extends.js";
+import { fixturesSchema } from "./fixtures.js";
 import { ignorePatternsSchema } from "./ignore-patterns.js";
 import { isolationSchema } from "./isolation.js";
 import { overridesSchema } from "./overrides.js";
@@ -36,6 +37,7 @@ export const configSchema = z
     components: componentsSchema.optional(),
     overrides: overridesSchema.optional(),
     ignorePatterns: ignorePatternsSchema.optional(),
+    fixtures: fixturesSchema.optional(),
   })
   .strict();
 

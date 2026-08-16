@@ -3,6 +3,7 @@ import type { ComponentsConfig } from "../schemas/components.js";
 import type { configSchema } from "../schemas/config.js";
 import type { EngineConfig } from "../schemas/engines.js";
 import type { ExtendsConfig } from "../schemas/extends.js";
+import type { FixturesConfig } from "../schemas/fixtures.js";
 import type { OverridesConfig } from "../schemas/overrides.js";
 import type { RulesConfig } from "../schemas/rules.js";
 import type { SettingsConfig } from "../schemas/settings.js";
@@ -36,6 +37,7 @@ export interface ResolvedLanternConfig {
   readonly components: ComponentsConfig;
   readonly overrides: OverridesConfig;
   readonly ignorePatterns: readonly string[];
+  readonly fixtures: FixturesConfig;
 }
 
 /**
