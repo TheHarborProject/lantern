@@ -1,4 +1,9 @@
 import type { LanternConfig } from "../../schemas/config.js";
+import {
+  defaultExtendsConfig,
+  defaultIgnorePatternsConfig,
+  defaultStandardsConfig,
+} from "./accessibility.js";
 import { defaultAuthConfig } from "./auth.js";
 import { defaultIsolationConfig } from "./isolation.js";
 import { defaultProjectConfig } from "./project.js";
@@ -16,5 +21,8 @@ export function createDefaultConfig(): LanternConfig {
       ...defaultIsolationConfig,
       globalCss: [...defaultIsolationConfig.globalCss],
     },
+    standards: [...defaultStandardsConfig],
+    extends: [...defaultExtendsConfig],
+    ignorePatterns: [...defaultIgnorePatternsConfig],
   };
 }

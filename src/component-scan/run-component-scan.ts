@@ -23,11 +23,17 @@ interface ExportCandidate {
  * every projection is derived from. Props are resolved exhaustively and tagged
  * with provenance so consumers can separate component-owned props from
  * inherited/resolved DOM and React props.
+ *
+ * `ignorePatterns` (RFC-005) are forwarded to discovery so configured project
+ * ignores affect which sources become scan/lint targets.
  */
-export function runComponentScan(projectRoot: string): CanonicalComponentModel {
+export function runComponentScan(
+  projectRoot: string,
+  ignorePatterns: readonly string[] = [],
+): CanonicalComponentModel {
   let sourceFiles: string[];
   try {
-    sourceFiles = findSourceFiles(projectRoot);
+    sourceFiles = findSourceFiles(projectRoot, ignorePatterns);
   } catch (cause) {
     throw new ComponentScanError(`Could not scan component sources in ${projectRoot}`, { cause });
   }
