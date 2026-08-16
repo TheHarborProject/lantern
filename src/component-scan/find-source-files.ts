@@ -1,5 +1,6 @@
 import { readdirSync } from "node:fs";
-import { extname, join } from "node:path";
+import { extname, join, relative, sep } from "node:path";
+import { matchesAnyGlob } from "../config/glob-match.js";
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx"]);
 const IGNORED_DIRECTORIES = new Set([
@@ -28,14 +29,22 @@ function isConfigLikeFile(name: string): boolean {
   return CONFIG_FILE_PATTERN.test(name) || IGNORED_FILE_NAMES.has(name);
 }
 
-/** Find TypeScript sources in stable path order without following symlinks. */
-export function findSourceFiles(root: string): string[] {
+/**
+ * Find TypeScript sources in stable path order without following symlinks.
+ *
+ * `ignorePatterns` (RFC-005 `ignorePatterns`) are project-relative glob
+ * patterns layered on top of the always-ignored directories below — they can
+ * exclude additional user-specific paths but can never resurrect `.lantern/`
+ * or the other built-in exclusions, which stay component-discovery-proof
+ * regardless of configuration.
+ */
+export function findSourceFiles(root: string, ignorePatterns: readonly string[] = []): string[] {
   const files: string[] = [];
-  visit(root, files);
+  visit(root, root, files, ignorePatterns);
   return files.sort(compareText);
 }
 
-function visit(directory: string, files: string[]): void {
+function visit(root: string, directory: string, files: string[], ignorePatterns: readonly string[]): void {
   const entries = readdirSync(directory, { withFileTypes: true }).sort((left, right) =>
     compareText(left.name, right.name),
   );
@@ -46,9 +55,14 @@ function visit(directory: string, files: string[]): void {
     }
 
     const path = join(directory, entry.name);
+    const relativePath = relative(root, path).split(sep).join("/");
+    if (ignorePatterns.length > 0 && matchesAnyGlob(relativePath, ignorePatterns)) {
+      continue;
+    }
+
     if (entry.isDirectory()) {
       if (!IGNORED_DIRECTORIES.has(entry.name)) {
-        visit(path, files);
+        visit(root, path, files, ignorePatterns);
       }
       continue;
     }

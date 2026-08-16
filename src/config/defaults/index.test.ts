@@ -43,4 +43,27 @@ describe("createDefaultConfig", () => {
     first.project.root = "changed";
     expect(second.project.root).toBe(".");
   });
+
+  it("expose une configuration RFC-005 minimale et déterministe", () => {
+    const config = createDefaultConfig();
+
+    expect(config.standards).toEqual(["wcag22-aa"]);
+    expect(config.extends).toEqual(["lantern:recommended"]);
+    expect(config.ignorePatterns).toEqual(["node_modules/", "dist/", "build/", ".next/", "coverage/"]);
+    // Fields the resolution layer already defaults usefully stay absent from the
+    // scaffolded file, so it does not repeat values that simply match defaults.
+    expect(config.engines).toBeUndefined();
+    expect(config.rules).toBeUndefined();
+    expect(config.components).toBeUndefined();
+    expect(config.overrides).toBeUndefined();
+    expect(config.settings).toBeUndefined();
+  });
+
+  it("ne partage pas les tableaux RFC-005 entre deux appels", () => {
+    const first = createDefaultConfig();
+    const second = createDefaultConfig();
+
+    first.standards?.push("rgaa4.1");
+    expect(second.standards).toEqual(["wcag22-aa"]);
+  });
 });
