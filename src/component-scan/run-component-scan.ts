@@ -1,4 +1,4 @@
-import { relative, sep } from "node:path";
+import { dirname, relative, sep } from "node:path";
 import ts from "typescript";
 import { ComponentScanError } from "../errors/component-scan-error.js";
 import type {
@@ -38,16 +38,8 @@ export function runComponentScan(
     throw new ComponentScanError(`Could not scan component sources in ${projectRoot}`, { cause });
   }
 
-  const program = ts.createProgram(sourceFiles, {
-    allowJs: false,
-    jsx: ts.JsxEmit.ReactJSX,
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    noEmit: true,
-    skipLibCheck: true,
-    strict: true,
-    target: ts.ScriptTarget.ES2022,
-  });
+  const compilerOptions = loadProjectCompilerOptions(projectRoot);
+  const program = ts.createProgram(sourceFiles, compilerOptions);
   const checker = program.getTypeChecker();
   const components: CanonicalComponent[] = [];
   const diagnostics: ComponentScanDiagnostic[] = [];
@@ -60,7 +52,7 @@ export function runComponentScan(
 
     for (const candidate of collectExportCandidates(sourceFile, checker, sourceFileSet)) {
       const source = toPortablePath(relative(projectRoot, candidate.declaration.getSourceFile().fileName));
-      const result = analyzeCandidate(candidate, source, checker, sourceFileSet, projectRoot);
+      const result = analyzeCandidate(candidate, source, checker, sourceFileSet, projectRoot, program);
       if ("component" in result) {
         components.push(result.component);
       } else {
@@ -70,7 +62,7 @@ export function runComponentScan(
   }
 
   return {
-    version: 1,
+    version: 2,
     components: uniqueBy(components, (component) => component.id).sort(compareComponents),
     diagnostics: uniqueBy(
       diagnostics,
@@ -124,6 +116,7 @@ function analyzeCandidate(
   checker: ts.TypeChecker,
   sourceFiles: ReadonlySet<string>,
   projectRoot: string,
+  program: ts.Program,
 ): { readonly component: CanonicalComponent } | { readonly diagnostic: ComponentScanDiagnostic } {
   if (!isReactComponentDeclaration(candidate.declaration)) {
     return {
@@ -135,7 +128,7 @@ function analyzeCandidate(
     };
   }
 
-  const propResult = extractProps(candidate.declaration, checker, sourceFiles, projectRoot);
+  const propResult = extractProps(candidate.declaration, checker, sourceFiles, projectRoot, program);
   const intrinsicElements = collectIntrinsicElements(candidate.declaration);
   return {
     component: {
@@ -212,6 +205,7 @@ function extractProps(
   checker: ts.TypeChecker,
   sourceFiles: ReadonlySet<string>,
   projectRoot: string,
+  program: ts.Program,
 ): {
   readonly props: readonly ResolvedComponentProp[];
   readonly status: ComponentAnalysisStatus;
@@ -232,6 +226,8 @@ function extractProps(
   }
 
   const type = checker.getTypeAtLocation(propsTypeNode);
+  const relevantDiagnostics = collectRelevantDiagnostics(program, propsTypeNode);
+  const propSurfaceFiles = collectPropSurfaceFiles(propsTypeNode, checker);
   const props = checker.getPropertiesOfType(type).map((property): ResolvedComponentProp => {
     const declarationNode = property.valueDeclaration ?? property.declarations?.[0];
     const location = declarationNode ?? propsTypeNode;
@@ -240,12 +236,85 @@ function extractProps(
       name: property.getName(),
       type: checker.typeToString(checker.getTypeOfSymbolAtLocation(property, location)),
       required: (property.flags & ts.SymbolFlags.Optional) === 0,
-      origin: declarationFile !== undefined && sourceFiles.has(declarationFile) ? "declared" : "inherited",
+      origin: classifyPropOrigin(declarationFile, propSurfaceFiles, sourceFiles),
       provenance: describeProvenance(declarationFile, propsTypeNode.getSourceFile().fileName, projectRoot),
+      ownerProvenance: describeProvenance(propsTypeNode.getSourceFile().fileName, propsTypeNode.getSourceFile().fileName, projectRoot),
     };
   }).sort((left, right) => compareText(left.name, right.name));
 
-  return { props, status: "complete", diagnostics: [] };
+  return {
+    props,
+    status: relevantDiagnostics.length > 0 ? "partial" : "complete",
+    diagnostics: relevantDiagnostics,
+  };
+}
+
+function loadProjectCompilerOptions(projectRoot: string): ts.CompilerOptions {
+  const configPath = ts.findConfigFile(projectRoot, (path) => ts.sys.fileExists(path), "tsconfig.json");
+  const fallback: ts.CompilerOptions = {
+    allowJs: false,
+    jsx: ts.JsxEmit.ReactJSX,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    noEmit: true,
+    skipLibCheck: true,
+    strict: true,
+    target: ts.ScriptTarget.ES2022,
+  };
+  if (configPath === undefined) {
+    return fallback;
+  }
+
+  const parsedText = ts.readConfigFile(configPath, (path) => ts.sys.readFile(path));
+  if (parsedText.error !== undefined) {
+    return fallback;
+  }
+  const parsed = ts.parseJsonConfigFileContent(parsedText.config, ts.sys, dirname(configPath));
+  return { ...parsed.options, noEmit: true };
+}
+
+function collectRelevantDiagnostics(program: ts.Program, node: ts.Node): string[] {
+  const file = node.getSourceFile();
+  const start = node.getStart(file);
+  const end = node.getEnd();
+  return [...program.getSyntacticDiagnostics(file), ...program.getSemanticDiagnostics(file)]
+    .filter((diagnostic) => diagnostic.start === undefined || rangesOverlap(diagnostic.start, diagnostic.length ?? 0, start, end))
+    .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, " "))
+    .filter((message, index, messages) => message !== "" && messages.indexOf(message) === index);
+}
+
+function rangesOverlap(leftStart: number, leftLength: number, rightStart: number, rightEnd: number): boolean {
+  const leftEnd = leftStart + leftLength;
+  return leftStart <= rightEnd && leftEnd >= rightStart;
+}
+
+function collectPropSurfaceFiles(node: ts.TypeNode, checker: ts.TypeChecker): ReadonlySet<string> {
+  const files = new Set<string>([node.getSourceFile().fileName]);
+  const visit = (child: ts.Node): void => {
+    if (ts.isTypeReferenceNode(child)) {
+      const symbol = checker.getSymbolAtLocation(child.typeName);
+      for (const declaration of symbol?.declarations ?? []) {
+        files.add(declaration.getSourceFile().fileName);
+      }
+    }
+    child.forEachChild(visit);
+  };
+  visit(node);
+  return files;
+}
+
+function classifyPropOrigin(
+  declarationFile: string | undefined,
+  propSurfaceFiles: ReadonlySet<string>,
+  sourceFiles: ReadonlySet<string>,
+): ResolvedComponentProp["origin"] {
+  if (declarationFile !== undefined && propSurfaceFiles.has(declarationFile)) {
+    return "component";
+  }
+  if (declarationFile !== undefined && sourceFiles.has(declarationFile)) {
+    return "project-inherited";
+  }
+  return "external-inherited";
 }
 
 /**

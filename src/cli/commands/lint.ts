@@ -26,6 +26,7 @@ interface LintCommandOptions {
 export function registerLintCommand(program: Command): void {
   program
     .command("lint")
+    .argument("[path]", "Limit linting to components sourced from a file or directory")
     .description("Run Lantern's accessibility lint workflow across discovered components.")
     .option("--all", "Process every discovered component, forcing a full rescan")
     .option("--since <ref>", "Target components changed since the given Git ref")
@@ -37,6 +38,7 @@ export function registerLintCommand(program: Command): void {
       `
 Examples:
   lantern lint
+  lantern lint src/components
   lantern lint --all
   lantern lint --since origin/main
   lantern lint --verbose
@@ -44,12 +46,12 @@ Examples:
   lantern lint --fail-on-skipped
 `,
     )
-    .action(async (options: LintCommandOptions, command: Command) => {
+    .action(async (targetPath: string | undefined, options: LintCommandOptions, command: Command) => {
       const globalOptions = command.optsWithGlobals<GlobalCliOptions>();
       try {
-        const mode = resolveTargetMode(options);
+        const mode = resolveTargetMode(options, targetPath);
         const config = loadConfig({ cwd: process.cwd(), explicitPath: globalOptions.config });
-        const report = buildLintReport({ config, mode });
+        const report = buildLintReport({ config, mode, cwd: process.cwd() });
 
         if (options.configure === true) {
           await runConfigure(config.configFilePath, report);
@@ -69,9 +71,18 @@ Examples:
     });
 }
 
-function resolveTargetMode(options: LintCommandOptions): LintTargetMode {
+function resolveTargetMode(options: LintCommandOptions, targetPath: string | undefined): LintTargetMode {
+  if (targetPath !== undefined && options.since !== undefined) {
+    throw new LintTargetingError("Cannot combine an explicit path target with --since.");
+  }
+  if (targetPath !== undefined && options.all === true) {
+    throw new LintTargetingError("Cannot combine an explicit path target with --all.");
+  }
   if (options.all === true && options.since !== undefined) {
     throw new LintTargetingError('"--all" and "--since" cannot be used together.');
+  }
+  if (targetPath !== undefined) {
+    return { kind: "path", path: targetPath };
   }
   if (options.since !== undefined) {
     return { kind: "since", ref: options.since };

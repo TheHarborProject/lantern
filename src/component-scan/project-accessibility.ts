@@ -63,7 +63,7 @@ const INTERACTION_HANDLER_PROPS = new Set([
 /** Derive the accessibility projection from the canonical model. */
 export function projectAccessibility(model: CanonicalComponentModel): AccessibilityIndex {
   return {
-    version: 1,
+    version: 2,
     components: model.components.map(toAccessibilityComponent),
   };
 }

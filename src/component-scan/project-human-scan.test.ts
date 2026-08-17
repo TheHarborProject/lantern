@@ -3,7 +3,7 @@ import type { CanonicalComponentModel } from "../types/component-scan.js";
 import { projectHumanScan } from "./project-human-scan.js";
 
 const model: CanonicalComponentModel = {
-  version: 1,
+  version: 2,
   components: [
     {
       id: "src/Button.tsx#Button",
@@ -12,9 +12,9 @@ const model: CanonicalComponentModel = {
       name: "Button",
       exportKind: "named",
       props: [
-        { name: "disabled", type: "boolean", required: false, origin: "inherited", provenance: "typescript/lib/lib.dom.d.ts" },
-        { name: "title", type: "string", required: false, origin: "inherited", provenance: "typescript/lib/lib.dom.d.ts" },
-        { name: "variant", type: '"ghost" | "default"', required: false, origin: "declared", provenance: "src/Button.tsx" },
+        { name: "disabled", type: "boolean", required: false, origin: "external-inherited", provenance: "typescript/lib/lib.dom.d.ts" },
+        { name: "title", type: "string", required: false, origin: "external-inherited", provenance: "typescript/lib/lib.dom.d.ts" },
+        { name: "variant", type: '"ghost" | "default"', required: false, origin: "component", provenance: "src/Button.tsx" },
       ],
       rendering: { intrinsicElements: ["button"], analyzable: true },
       analysis: { status: "complete", diagnostics: [] },
@@ -36,7 +36,7 @@ describe("projectHumanScan", () => {
     const index = projectHumanScan(model);
 
     expect(index).toMatchObject({
-      version: 1,
+      version: 2,
       components: [
         {
           id: "src/Button.tsx#Button",

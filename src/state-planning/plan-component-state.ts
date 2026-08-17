@@ -60,8 +60,8 @@ export function planComponentState(input: PlanComponentStateInput): ComponentSta
     return { status: "unresolved", component: component.name, componentId: component.id, unresolvedProps };
   }
 
-  const fixedProps = resolvedProps.filter((resolved) => resolved.values.length === 1);
-  const dimensionProps = resolvedProps.filter((resolved) => resolved.values.length > 1);
+  const fixedProps = resolvedProps.filter((resolved) => resolved.values.length === 1 || !resolved.stateDimension);
+  const dimensionProps = resolvedProps.filter((resolved) => resolved.values.length > 1 && resolved.stateDimension);
 
   const { combinations, totalPossible, truncated } = generateBoundedCombinations(
     dimensionProps.map((dimension) => dimension.values),
@@ -89,7 +89,8 @@ export function planComponentState(input: PlanComponentStateInput): ComponentSta
     status: "ready",
     component: component.name,
     componentId: component.id,
-    dimensions: resolvedProps,
+    dimensions: dimensionProps,
+    fixedProps,
     states,
     totalPossibleStates: totalPossible,
     truncated,

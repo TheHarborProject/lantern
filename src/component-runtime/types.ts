@@ -46,3 +46,20 @@ export interface RenderComponentOptions {
   /** Injected browser launcher; defaults to headless Chromium. */
   readonly launch?: (() => Promise<Browser>) | undefined;
 }
+
+export interface ComponentRuntimeSessionOptions {
+  readonly projectRoot: string;
+  readonly globals?: IsolationGlobals | undefined;
+  readonly mountTimeoutMs?: number | undefined;
+  readonly bundle?: ComponentBundler | undefined;
+  readonly launch?: (() => Promise<Browser>) | undefined;
+}
+
+export interface ComponentRuntime {
+  render<T>(props: Record<string, unknown>, use: (render: IsolatedRender) => Promise<T>): Promise<T>;
+}
+
+export interface LintExecutionSession {
+  componentRuntime(target: IsolationComponentTarget): Promise<ComponentRuntime>;
+  close(): Promise<void>;
+}

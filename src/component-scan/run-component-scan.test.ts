@@ -61,13 +61,21 @@ describe("runComponentScan", () => {
       analysis: { status: "complete", diagnostics: [] },
     });
     expect(index.components[0]?.props).toEqual([
-      { name: "message", type: "string", required: true, origin: "declared", provenance: "src/Banner.tsx" },
+      {
+        name: "message",
+        type: "string",
+        required: true,
+        origin: "component",
+        provenance: "src/Banner.tsx",
+        ownerProvenance: "src/Banner.tsx",
+      },
       {
         name: "tone",
         type: '"info" | "warning" | undefined',
         required: false,
-        origin: "declared",
+        origin: "component",
         provenance: "src/Banner.tsx",
+        ownerProvenance: "src/Banner.tsx",
       },
     ]);
     expect(index.components[1]?.props).toEqual([
@@ -75,10 +83,18 @@ describe("runComponentScan", () => {
         name: "disabled",
         type: "boolean | undefined",
         required: false,
-        origin: "declared",
+        origin: "component",
         provenance: "src/Button.tsx",
+        ownerProvenance: "src/Button.tsx",
       },
-      { name: "label", type: "string", required: true, origin: "declared", provenance: "src/Button.tsx" },
+      {
+        name: "label",
+        type: "string",
+        required: true,
+        origin: "component",
+        provenance: "src/Button.tsx",
+        ownerProvenance: "src/Button.tsx",
+      },
     ]);
     expect(index.components[1]?.rendering).toEqual({ intrinsicElements: ["button"], analyzable: true });
     expect(index.diagnostics).toEqual([]);
@@ -123,7 +139,14 @@ describe("runComponentScan", () => {
     ]);
     expect(index.components[0]?.name).toBe("Icon");
     expect(index.components[1]?.props).toEqual([
-      { name: "text", type: "string", required: true, origin: "declared", provenance: "src/Notice.tsx" },
+      {
+        name: "text",
+        type: "string",
+        required: true,
+        origin: "component",
+        provenance: "src/Notice.tsx",
+        ownerProvenance: "src/Notice.tsx",
+      },
     ]);
   });
 
@@ -176,8 +199,8 @@ describe("runComponentScan", () => {
     const index = runComponentScan(root);
     const button = index.components[0];
 
-    const declared = button?.props.filter((prop) => prop.origin === "declared") ?? [];
-    const inherited = button?.props.filter((prop) => prop.origin === "inherited") ?? [];
+    const declared = button?.props.filter((prop) => prop.origin === "component") ?? [];
+    const inherited = button?.props.filter((prop) => prop.origin === "external-inherited") ?? [];
     expect(declared.map((prop) => prop.name)).toEqual(["size", "variant"]);
     expect(declared.every((prop) => prop.provenance === "src/Button.tsx")).toBe(true);
     expect(inherited.map((prop) => prop.name).sort()).toEqual(["disabled", "title"]);

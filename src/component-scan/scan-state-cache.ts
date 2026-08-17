@@ -31,6 +31,7 @@ export type ScanChangeReason =
   | "no-previous-cache"
   | "corrupt-cache"
   | "files-changed"
+  | "fingerprint-changed"
   | "unchanged";
 
 export interface ScanChangeDetectionResult {
@@ -46,10 +47,15 @@ export interface ScanChangeDetectionResult {
  */
 export function detectChangedSourceFiles(
   currentHashes: Readonly<Record<string, string>>,
+  currentFingerprint: string,
   previous: ScanStateCache | undefined,
 ): ScanChangeDetectionResult {
   if (previous === undefined) {
     return { changed: true, reason: "no-previous-cache" };
+  }
+
+  if (previous.fingerprint !== currentFingerprint) {
+    return { changed: true, reason: "fingerprint-changed" };
   }
 
   const currentPaths = Object.keys(currentHashes);
@@ -72,11 +78,12 @@ function isScanStateCache(data: unknown): data is ScanStateCache {
   if (typeof data !== "object" || data === null) {
     return false;
   }
-  const candidate = data as { version?: unknown; sourceHashes?: unknown };
+  const candidate = data as { version?: unknown; sourceHashes?: unknown; fingerprint?: unknown };
   return (
-    candidate.version === 1 &&
+    candidate.version === 2 &&
     typeof candidate.sourceHashes === "object" &&
     candidate.sourceHashes !== null &&
-    Object.values(candidate.sourceHashes).every((value) => typeof value === "string")
+    Object.values(candidate.sourceHashes).every((value) => typeof value === "string") &&
+    typeof candidate.fingerprint === "string"
   );
 }

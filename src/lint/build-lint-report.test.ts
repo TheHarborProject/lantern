@@ -169,6 +169,6 @@ describe("buildLintReport", () => {
 
     const report = buildLintReport({ config: resolvedConfig(root), mode: { kind: "all" } });
 
-    expect(report.targeting).toEqual({ mode: { kind: "all" }, rescanned: true });
+    expect(report.targeting).toEqual({ mode: { kind: "all" }, rescanned: true, selection: { kind: "all" } });
   });
 });

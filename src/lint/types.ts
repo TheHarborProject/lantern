@@ -45,10 +45,16 @@ export interface StateReport {
   readonly stateId: string;
   readonly props: Readonly<Record<string, unknown>>;
   readonly propProvenance: StatePropProvenance;
-  /** Empty until a check provider (RFC-008) is attached. */
+  /** Empty when no provider ran or when an available provider finds no checks. */
   readonly checks: readonly CheckResult[];
   /** `"review"` whenever `checks` is empty: nothing was actually verified. */
   readonly status: ReportStatus;
+}
+
+export interface StateDimensionReport {
+  readonly name: string;
+  readonly values: readonly unknown[];
+  readonly source: PropValueSource;
 }
 
 /** The state-planning outcome for one component (RFC-006), carried through untouched. */
@@ -63,6 +69,7 @@ export interface ComponentReport {
   /** Aggregate report status; `unresolved` and explicit `skip` both report as `"skipped"`. */
   readonly status: ReportStatus;
   readonly states: readonly StateReport[];
+  readonly dimensions?: readonly StateDimensionReport[] | undefined;
   readonly unresolvedProps?: readonly UnresolvedProp[] | undefined;
   /** Human-readable reason for a `"skipped"` status (explicit skip or unresolved detail). */
   readonly reason?: string | undefined;
@@ -99,19 +106,45 @@ export interface LintSummary {
 export type LintTargetMode =
   | { readonly kind: "incremental" }
   | { readonly kind: "all" }
-  | { readonly kind: "since"; readonly ref: string };
+  | { readonly kind: "since"; readonly ref: string }
+  | { readonly kind: "path"; readonly path: string };
 
 export interface LintTargetingInfo {
   readonly mode: LintTargetMode;
   /** Whether discovery was actually rescanned, or a valid cache was reused. */
   readonly rescanned: boolean;
+  readonly selection?: LintTargetSelectionInfo | undefined;
 }
+
+export type LintTargetSelectionInfo =
+  | { readonly kind: "all" }
+  | { readonly kind: "none"; readonly reason?: string | undefined }
+  | { readonly kind: "affected"; readonly componentCount: number }
+  | {
+      readonly kind: "path";
+      readonly path: string;
+      readonly pathKind: "file" | "directory";
+      readonly componentCount: number;
+    }
+  | { readonly kind: "fallback"; readonly reason: string; readonly details?: readonly string[] | undefined };
+
+export interface LintDiagnostic {
+  readonly source: string;
+  readonly component?: string | undefined;
+  readonly message: string;
+}
+
+export type ProviderStatus =
+  | { readonly kind: "unavailable"; readonly reason: string }
+  | { readonly kind: "available"; readonly provider: string };
 
 /** The full structured `lantern lint` result (RFC-007). */
 export interface LintReport {
-  readonly version: 1;
+  readonly version: 2;
   readonly generatedAt: string;
   readonly targeting: LintTargetingInfo;
+  readonly provider?: ProviderStatus | undefined;
+  readonly diagnostics?: readonly LintDiagnostic[] | undefined;
   readonly standards: readonly StandardReport[];
   readonly summary: LintSummary;
 }

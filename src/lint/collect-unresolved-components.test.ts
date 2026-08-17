@@ -20,7 +20,7 @@ function unresolvedComponent(overrides: Partial<ComponentReport> = {}): Componen
 
 function report(standards: LintReport["standards"]): LintReport {
   return {
-    version: 1,
+    version: 2,
     generatedAt: new Date(0).toISOString(),
     targeting: { mode: { kind: "incremental" }, rescanned: true },
     standards,

@@ -26,12 +26,19 @@ export function generateBoundedCombinations(
   const totalPossible = valueSets.reduce((product, values) => product * values.length, 1);
   const limit = Math.max(0, Math.min(totalPossible, maxCombinations));
 
-  const combinations: (readonly unknown[])[] = [];
-  for (let index = 0; index < limit; index += 1) {
-    combinations.push(decodeCombination(index, valueSets));
+  if (limit === totalPossible) {
+    const exhaustive: (readonly unknown[])[] = [];
+    for (let index = 0; index < limit; index += 1) {
+      exhaustive.push(decodeCombination(index, valueSets));
+    }
+    return { combinations: exhaustive, totalPossible, truncated: false };
   }
 
-  return { combinations, totalPossible, truncated: combinations.length < totalPossible };
+  return {
+    combinations: generateCoverageCombinations(valueSets, limit),
+    totalPossible,
+    truncated: true,
+  };
 }
 
 /** Decode a linear index into one combination, last dimension fastest. */
@@ -44,4 +51,39 @@ function decodeCombination(index: number, valueSets: readonly (readonly unknown[
     return values[choice];
   });
   return reversed.reverse();
+}
+
+function generateCoverageCombinations(
+  valueSets: readonly (readonly unknown[])[],
+  limit: number,
+): readonly (readonly unknown[])[] {
+  if (limit === 0) {
+    return [];
+  }
+
+  const selected = new Map<string, readonly unknown[]>();
+  const add = (combination: readonly unknown[]): void => {
+    if (selected.size < limit) {
+      selected.set(JSON.stringify(combination), combination);
+    }
+  };
+
+  const base = valueSets.map((values) => values[0]);
+  add(base);
+
+  for (let dimensionIndex = 0; dimensionIndex < valueSets.length && selected.size < limit; dimensionIndex += 1) {
+    const values = valueSets[dimensionIndex] ?? [];
+    for (let valueIndex = 1; valueIndex < values.length && selected.size < limit; valueIndex += 1) {
+      const combination = [...base];
+      combination[dimensionIndex] = values[valueIndex];
+      add(combination);
+    }
+  }
+
+  const totalPossible = valueSets.reduce((product, values) => product * values.length, 1);
+  for (let index = 1; selected.size < limit && index < totalPossible; index += 1) {
+    add(decodeCombination(index, valueSets));
+  }
+
+  return [...selected.values()];
 }
