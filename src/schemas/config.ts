@@ -7,6 +7,7 @@ import { fixturesSchema } from "./fixtures.js";
 import { ignorePatternsSchema } from "./ignore-patterns.js";
 import { isolationSchema } from "./isolation.js";
 import { overridesSchema } from "./overrides.js";
+import { outputSchema } from "./output.js";
 import { projectSchema } from "./project.js";
 import { rulesSchema } from "./rules.js";
 import { settingsSchema } from "./settings.js";
@@ -38,6 +39,7 @@ export const configSchema = z
     overrides: overridesSchema.optional(),
     ignorePatterns: ignorePatternsSchema.optional(),
     fixtures: fixturesSchema.optional(),
+    output: outputSchema.optional(),
   })
   .strict();
 

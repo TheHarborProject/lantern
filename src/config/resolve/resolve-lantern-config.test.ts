@@ -9,6 +9,7 @@ describe("resolveLanternConfig", () => {
     const resolved = resolveLanternConfig(raw);
 
     expect(resolved).toEqual({
+      output: { mode: "compact" },
       standards: ["wcag22-aa"],
       extends: [],
       engines: { static: true, rendered: true, axe: false, lighthouse: false },
@@ -25,6 +26,10 @@ describe("resolveLanternConfig", () => {
     const raw = configSchema.parse({ project: {}, standards: ["wcag22-aa", "rgaa4.1"] });
 
     expect(resolveLanternConfig(raw).standards).toEqual(["wcag22-aa", "rgaa4.1"]);
+  });
+
+  it("resolves configured output mode over the compact default", () => {
+    expect(resolveLanternConfig(configSchema.parse({ project: {}, output: { mode: "verbose" } })).output.mode).toBe("verbose");
   });
 
   it("applies extends presets before the project configuration", () => {

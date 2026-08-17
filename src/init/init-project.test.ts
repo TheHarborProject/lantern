@@ -147,6 +147,12 @@ describe("lantern init domain", () => {
     expect(readConfig(root)).toEqual({ project: { startScript: "dev" }, standards: ["wcag21-aa"] });
   });
 
+  it("serializes only non-default output modes", async () => {
+    writePackageJson(root, { dev: "vite" });
+    await initProject(root, prompting({ outputMode: "minimal" }));
+    expect(readConfig(root)).toEqual({ project: { startScript: "dev" }, output: { mode: "minimal" } });
+  });
+
   it("serializes one trimmed ignore pattern", async () => {
     writePackageJson(root, { dev: "vite" });
 
@@ -222,6 +228,7 @@ interface PromptOverrides {
   readonly standard?: "wcag21-a" | "wcag21-aa" | "wcag22-a" | "wcag22-aa" | "rgaa4.1" | undefined;
   readonly addIgnores?: boolean | undefined;
   readonly ignorePatterns?: readonly (string | undefined)[];
+  readonly outputMode?: "minimal" | "compact" | "verbose" | undefined;
 }
 
 function prompting(overrides: PromptOverrides = {}): InitPrompter {
@@ -231,6 +238,7 @@ function prompting(overrides: PromptOverrides = {}): InitPrompter {
     selectStartScript: vi.fn(() => Promise.resolve("startScript" in overrides ? overrides.startScript : "dev")),
     selectSourceDirectory: vi.fn(() => Promise.resolve("sourceDirectory" in overrides ? overrides.sourceDirectory : ".")),
     selectStandard: vi.fn(() => Promise.resolve("standard" in overrides ? overrides.standard : "wcag22-aa")),
+    selectOutputMode: vi.fn(() => Promise.resolve("outputMode" in overrides ? overrides.outputMode : "compact")),
     confirmIgnorePatterns: vi.fn(() => Promise.resolve("addIgnores" in overrides ? overrides.addIgnores : false)),
     inputIgnorePattern: vi.fn(() => Promise.resolve(patterns[patternIndex++])),
     confirmAnotherIgnorePattern: vi.fn(() => Promise.resolve(patternIndex < patterns.length)),
@@ -238,7 +246,7 @@ function prompting(overrides: PromptOverrides = {}): InitPrompter {
 }
 
 function defaultChoices(): Parameters<typeof createMinimalInitConfig>[0] {
-  return { startScript: "dev", sourceDirectory: ".", standard: "wcag22-aa", ignorePatterns: [] };
+  return { startScript: "dev", sourceDirectory: ".", standard: "wcag22-aa", outputMode: "compact", ignorePatterns: [] };
 }
 
 function writePackageJson(directory: string, scripts: Record<string, string>): void {
