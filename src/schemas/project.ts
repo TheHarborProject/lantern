@@ -5,6 +5,7 @@ import { z } from "zod";
  * Every field has a safe runtime default except `baseUrl` and `startScript`:
  * - `root` defaults to `"."`;
  * - `workingDirectory` defaults to `"."`, so it resolves from `root` when omitted;
+ * - `sourceDirectory` defaults to `"."`, preserving root-wide component discovery;
  * - `autoStart` defaults to `false` so Lantern never starts a process implicitly;
  * - `baseUrl` and `startScript` stay optional during configuration loading:
  *   whether they are required depends on the command being executed
@@ -14,6 +15,7 @@ export const projectSchema = z
   .object({
     root: z.string().default("."),
     workingDirectory: z.string().default("."),
+    sourceDirectory: z.string().trim().min(1).default("."),
     baseUrl: z.string().optional(),
     startScript: z.string().trim().min(1).optional(),
     // Keep the retired key in the input shape solely to reject it explicitly;

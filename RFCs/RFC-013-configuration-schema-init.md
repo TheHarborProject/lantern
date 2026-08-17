@@ -4,6 +4,13 @@
 
 Implemented
 
+> Lantern follow-up (2026-08): the repository implementation now uses an
+> interactive, minimal `lantern init`. It writes `.lantern/config.json`, asks
+> about the startup script, component source directory, accessibility standard,
+> and optional ignore patterns, and leaves selected runtime defaults implicit.
+> The exhaustive SnapRun scaffold described below is historical context and is
+> superseded by the current Lantern behavior documented in the README.
+
 ## Summary
 
 This RFC introduces a formal configuration contract for SnapRun using Zod and adds a new `snaprun init` command.

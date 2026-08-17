@@ -51,4 +51,14 @@ describe("findSourceFiles", () => {
 
     expect(findSourceFiles(root, ["coverage/"])).toEqual([join(root, "src", "Button.tsx")]);
   });
+
+  it("limits discovery to a configured source directory while keeping ignores project-relative", () => {
+    writeSource(root, "src/Button.tsx");
+    writeSource(root, "src/generated/Generated.tsx");
+    writeSource(root, "outside/Widget.tsx");
+
+    expect(findSourceFiles(root, ["src/generated/**"], join(root, "src"))).toEqual([
+      join(root, "src", "Button.tsx"),
+    ]);
+  });
 });

@@ -24,7 +24,7 @@ export function registerAuditCommand(program: Command): void {
         const config = loadConfig({ cwd: process.cwd(), explicitPath: globalOptions.config });
         const root = config.project.root;
 
-        const model = runComponentScan(root, config.ignorePatterns);
+        const model = runComponentScan(root, config.ignorePatterns, config.project.sourceDirectory);
         writeComponentScanCache(root, model);
         const humanIndexPath = writeScanIndex(root, projectHumanScan(model));
         writeAccessibilityIndex(root, projectAccessibility(model));

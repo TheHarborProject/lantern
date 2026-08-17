@@ -25,6 +25,24 @@ describe("resolveConfigPaths", () => {
     expect(resolved.engines).toEqual({ static: true, rendered: true, axe: false, lighthouse: false });
   });
 
+  it("treats .lantern/config.json as rooted in its containing project", () => {
+    const raw = configSchema.parse({ project: { startScript: "dev" } });
+
+    const resolved = resolveConfigPaths(raw, join("/tmp", "app", ".lantern", "config.json"));
+
+    expect(resolved.project.root).toBe(join("/tmp", "app"));
+    expect(resolved.project.workingDirectory).toBe(join("/tmp", "app"));
+    expect(resolved.project.sourceDirectory).toBe(join("/tmp", "app"));
+  });
+
+  it("resolves project.sourceDirectory relative to project.root", () => {
+    const raw = configSchema.parse({ project: { root: "./app", sourceDirectory: "src/components" } });
+
+    const resolved = resolveConfigPaths(raw, join("/tmp", "project", "lantern.config.json"));
+
+    expect(resolved.project.sourceDirectory).toBe(join("/tmp", "project", "app", "src", "components"));
+  });
+
   it("stays compatible with existing isolation and auth configuration", () => {
     const raw = configSchema.parse({
       project: { root: "." },

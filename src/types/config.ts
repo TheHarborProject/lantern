@@ -48,8 +48,9 @@ export interface ResolvedLanternConfig {
  */
 export interface ResolvedConfig extends ResolvedLanternConfig, Pick<RawConfig, "auth" | "isolation"> {
   readonly configFilePath: string;
-  readonly project: Omit<RawConfig["project"], "root" | "workingDirectory"> & {
+  readonly project: Omit<RawConfig["project"], "root" | "workingDirectory" | "sourceDirectory"> & {
     readonly root: string;
     readonly workingDirectory: string;
+    readonly sourceDirectory: string;
   };
 }
