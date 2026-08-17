@@ -1,4 +1,5 @@
 import type { CheckResult } from "../lint/types.js";
+import { AuditCancelledError } from "../lint/events.js";
 import { matchEngine } from "./match-engine.js";
 import type { Engine, EngineExecutionContext, PlannedCheck } from "./types.js";
 
@@ -8,16 +9,19 @@ export interface ExecutedCheck {
 }
 
 /**
- * Execute planned checks against capability-matched engines (RFC-008).
+ * Execute planned checks against capability-matched engines (RFC-008/009.1).
  *
  * Sequential and deterministic by planned-check order: concurrency is future
  * work (RFC-008 explicitly defers it), so browser/engine completion order can
  * never leak into result ordering. A check with no matching engine never
  * calls `execute` — it normalizes straight to a truthful `review` outcome
  * (never a silent pass). A genuine engine failure (thrown, not returned) is
- * left to propagate: it is an operational failure, not an accessibility
- * result, and the caller is expected to let it abort the run (RFC-007 exit
- * code `2`) rather than fabricate a check outcome for it.
+ * caught per check: it becomes a `review` result with
+ * `outcomeReason: "operational-error"` carrying the failing check's own
+ * identity, so one check's engine exception never discards results already
+ * collected for other checks, states, or components. Cancellation
+ * (`AuditCancelledError`) is never reclassified this way — it always
+ * propagates to the caller unchanged.
  */
 export async function executePlannedChecks(
   checks: readonly PlannedCheck[],
@@ -32,10 +36,35 @@ export async function executePlannedChecks(
       continue;
     }
     const startedAt = Date.now();
-    const result = await matched.engine.execute(check, contextFor(check));
-    executed.push({ check, result: { ...result, durationMs: Date.now() - startedAt } });
+    try {
+      const result = await matched.engine.execute(check, contextFor(check));
+      executed.push({ check, result: { ...result, durationMs: Date.now() - startedAt } });
+    } catch (error) {
+      if (error instanceof AuditCancelledError) {
+        throw error;
+      }
+      executed.push({ check, result: operationalErrorResult(check, matched.engine, error, Date.now() - startedAt) });
+    }
   }
   return executed;
+}
+
+function operationalErrorResult(check: PlannedCheck, engine: Engine, error: unknown, durationMs: number): CheckResult {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    checkId: check.checkId,
+    componentId: check.componentId,
+    stateId: check.stateId,
+    ruleId: check.ruleId,
+    severity: check.severity,
+    status: "review",
+    outcomeReason: "operational-error",
+    message: `"${check.ruleId}" could not be evaluated for "${check.component}" due to an operational error.`,
+    reason: message,
+    engine: { name: engine.identity.id, version: engine.identity.version },
+    evidence: [{ kind: "observation", name: "operationalError", value: message }],
+    durationMs,
+  };
 }
 
 function unsupportedResult(check: PlannedCheck, reason: string): CheckResult {

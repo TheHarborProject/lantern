@@ -379,16 +379,64 @@ describe("buildLintReport", () => {
     expect(button?.states[1]?.checks[0]?.evidence).toContainEqual(expect.objectContaining({ kind: "expectation", observed: "excluded" }));
   });
 
-  it("supports canonical component-ID selection and rejects unknown IDs", async () => {
+  it("supports canonical component-ID selection and rejects unknown IDs as a typed selection error", async () => {
     writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
     writeFileSync(join(root, "Label.tsx"), "export const Label = () => <label />;");
     const all = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" } });
     const buttonId = all.standards[0]?.components.find((component) => component.component === "Button")?.componentId;
     const selected = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" }, componentIds: [buttonId!] });
     expect(selected.standards[0]?.components.map((component) => component.component)).toEqual(["Button"]);
-    const invalid = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" }, componentIds: ["missing#Thing"] });
-    expect(invalid.status).toBe("failed");
-    expect(invalid.diagnostics?.[0]?.message).toContain("Unknown canonical component ID");
+
+    // Input/target validation errors are not operational engine failures
+    // (RFC-009.1): they keep their own typed classification and reject the
+    // promise, exactly like `LintTargetingError` did before RFC-009, instead
+    // of being downgraded to a generic `status: "failed"` report.
+    const invalidSelection = await buildLintReport({
+      config: resolvedConfig(root), mode: { kind: "incremental" }, componentIds: ["missing#Thing"],
+    }).catch((error: unknown) => error);
+    expect(invalidSelection).toMatchObject({ name: "LintSelectionError", code: "LINT_SELECTION_INVALID" });
+    expect(invalidSelection).toBeInstanceOf(Error);
+    expect((invalidSelection as Error).message).toContain("Unknown canonical component ID");
+  });
+
+  it("propagates a typed LintTargetingError instead of converting it to an operational failure report", async () => {
+    const badPath = await buildLintReport({
+      config: resolvedConfig(root), mode: { kind: "path", path: "src/nope" },
+    }).catch((error: unknown) => error);
+    expect(badPath).toMatchObject({ name: "LintTargetingError", code: "LINT_TARGETING_INVALID" });
+    expect((badPath as Error).message).toContain("Target path does not exist");
+  });
+
+  it("rejects unsupported state/check selectors as a typed selection error, not an operational failure", async () => {
+    writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
+
+    await expect(
+      buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" }, stateIds: ["state-1"] }),
+    ).rejects.toMatchObject({ name: "LintSelectionError", code: "LINT_SELECTION_INVALID" });
+  });
+
+  it("preserves already-collected component results when a later component's runtime never launches", async () => {
+    // Sorted before "ZInteractive.tsx" so it is processed first; it never
+    // needs the rendered-dom runtime, so it fully completes before the
+    // browser launch failure aborts the run.
+    writeFileSync(join(root, "AStatic.tsx"), "export const AStatic = () => <label>Text</label>;");
+    writeFileSync(join(root, "ZInteractive.tsx"), "export const ZInteractive = () => <button />;");
+    const launch = vi.fn(() => Promise.reject(new Error("no browser binary available")));
+
+    const report = await buildLintReport({
+      config: resolvedConfig(root, { rules: { "lantern/accessible-name": "error", "lantern/keyboard-access": "error" } }),
+      mode: { kind: "incremental" },
+      launch,
+    });
+
+    expect(report.status).toBe("failed");
+    expect(report.diagnostics?.[0]).toMatchObject({ code: "OPERATIONAL_ERROR", severity: "error" });
+    const components = report.standards[0]?.components.map((component) => component.component);
+    expect(components).toContain("AStatic");
+    expect(components).not.toContain("ZInteractive");
+    // The partially-collected run still reports truthful, non-zero counts
+    // instead of a synthetic empty summary.
+    expect(report.summary.componentsPass + report.summary.componentsFail + report.summary.componentsReview).toBeGreaterThan(0);
   });
 
   it("emits correlated deterministic lifecycle events and supports cancellation", async () => {
@@ -404,6 +452,69 @@ describe("buildLintReport", () => {
     const cancelled = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" }, signal: controller.signal, events: (event) => { cancelledTypes.push(event.type); } });
     expect(cancelled.status).toBe("cancelled");
     expect(cancelledTypes).toEqual(["run-started", "diagnostic", "run-cancelled"]);
+  });
+
+  it("isolates one state's engine crash as an operational-error check outcome and keeps the run completed", async () => {
+    writeFileSync(join(root, "Button.tsx"), "type Props = { variant: \"a\" | \"b\" }; export const Button = ({ variant }: Props) => <button data-variant={variant} />;");
+    const evaluate = vi.fn();
+    // First state's render probe throws (simulates a genuine engine crash);
+    // the second state's render probe resolves normally.
+    evaluate
+      .mockImplementationOnce(() => Promise.resolve(undefined))
+      .mockImplementationOnce(() => Promise.resolve(null))
+      .mockImplementationOnce(() => Promise.reject(new Error("render probe crashed")))
+      .mockImplementationOnce(() => Promise.resolve(undefined))
+      .mockImplementationOnce(() => Promise.resolve(null))
+      .mockImplementationOnce(() =>
+        Promise.resolve({ usableInteractiveCount: 1, enabledInteractiveCount: 1, tabbableCount: 1, disabledInteractiveCount: 0 }),
+      );
+    const page = {
+      setContent: vi.fn(() => Promise.resolve(undefined)),
+      evaluate,
+      addScriptTag: vi.fn(() => Promise.resolve(null)),
+      waitForFunction: vi.fn(() => Promise.resolve(null)),
+      close: vi.fn(() => Promise.resolve(undefined)),
+    } as unknown as Page;
+    const browser = { newPage: vi.fn(() => Promise.resolve(page)), close: vi.fn(() => Promise.resolve(undefined)) } as unknown as Browser;
+    const launch = vi.fn(() => Promise.resolve(browser));
+    const bundle = vi.fn(() => Promise.resolve("/* bundled */"));
+
+    const report = await buildLintReport({
+      config: resolvedConfig(root, {
+        rules: { "lantern/keyboard-access": "error" },
+        components: { Button: { props: { variant: { values: ["a", "b"] } } } },
+      }),
+      mode: { kind: "incremental" },
+      bundle,
+      launch,
+    });
+
+    // A single check's engine exception is recoverable: the run still
+    // completes rather than failing outright.
+    expect(report.status).toBe("completed");
+    const button = report.standards[0]?.components[0];
+    expect(button?.states).toHaveLength(2);
+    const [failedState, passedState] = button?.states ?? [];
+    expect(failedState?.checks[0]).toMatchObject({
+      checkId: failedState?.checks[0]?.checkId,
+      componentId: button?.componentId,
+      stateId: failedState?.stateId,
+      ruleId: "lantern/keyboard-access",
+      status: "review",
+      outcomeReason: "operational-error",
+    });
+    expect(failedState?.checks[0]?.reason).toContain("render probe crashed");
+    // The independent second check continued and completed normally.
+    expect(passedState?.checks[0]?.status).toBe("pass");
+    expect(passedState?.checks[0]?.outcomeReason).toBeUndefined();
+
+    const checkDiagnostic = report.diagnostics?.find((diagnostic) => diagnostic.code === "CHECK_OPERATIONAL_ERROR");
+    expect(checkDiagnostic).toMatchObject({
+      scope: "check",
+      componentId: button?.componentId,
+      stateId: failedState?.stateId,
+      checkId: failedState?.checks[0]?.checkId,
+    });
   });
 
   it("preserves provenance for fixed configured props", async () => {
