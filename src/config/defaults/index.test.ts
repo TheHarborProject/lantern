@@ -18,7 +18,7 @@ describe("createDefaultConfig", () => {
     const { project } = createDefaultConfig();
 
     expect(Object.keys(project).sort()).toEqual(
-      ["autoStart", "baseUrl", "root", "startScript", "workingDirectory"].sort(),
+      ["autoStart", "baseUrl", "root", "sourceDirectory", "startScript", "workingDirectory"].sort(),
     );
   });
 

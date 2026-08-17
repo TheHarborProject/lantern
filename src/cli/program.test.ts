@@ -35,4 +35,11 @@ describe("createProgram", () => {
 
     expect(program.commands.map((command) => command.name())).toContain("lint");
   });
+
+  it("exposes lantern init in CLI help", () => {
+    const program = createProgram();
+
+    expect(program.commands.map((command) => command.name())).toContain("init");
+    expect(program.helpInformation()).toContain("init");
+  });
 });

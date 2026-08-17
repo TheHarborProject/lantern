@@ -117,7 +117,13 @@ async function buildSuccessfulLintReport(options: BuildLintReportOptions, runId:
   const startedAt = Date.now();
   throwIfCancelled(options.signal);
 
-  const targets = resolveLintTargets({ root: config.project.root, cwd, ignorePatterns: config.ignorePatterns, mode });
+  const targets = resolveLintTargets({
+    root: config.project.root,
+    sourceDirectory: config.project.sourceDirectory,
+    cwd,
+    ignorePatterns: config.ignorePatterns,
+    mode,
+  });
   const accessibilityById = indexAccessibility(targets.model);
   const requestedIds = validateSelection(options, targets.model);
   const includedComponents = filterComponents(targets.model, requestedIds ?? targets.targetComponentIds);

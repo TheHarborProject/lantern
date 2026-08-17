@@ -27,6 +27,7 @@ export interface LintTargetSelection {
 
 export interface ResolveLintTargetsOptions {
   readonly root: string;
+  readonly sourceDirectory?: string | undefined;
   readonly cwd?: string | undefined;
   readonly ignorePatterns: readonly string[];
   readonly mode: LintTargetMode;
@@ -48,14 +49,16 @@ export interface ResolveLintTargetsOptions {
  *   {@link computeSinceTargets}) — otherwise it falls back to the full set too.
  */
 export function resolveLintTargets(options: ResolveLintTargetsOptions): LintTargetSelection {
-  const { root, cwd = root, ignorePatterns, mode } = options;
+  const { root, sourceDirectory = root, cwd = root, ignorePatterns, mode } = options;
 
   const { model, rescanned } =
-    mode.kind === "all" ? forceRescan(root, ignorePatterns) : incrementalScan(root, ignorePatterns);
+    mode.kind === "all"
+      ? forceRescan(root, sourceDirectory, ignorePatterns)
+      : incrementalScan(root, sourceDirectory, ignorePatterns);
 
   const narrowedSelection =
     mode.kind === "since"
-      ? computeSinceTargets(model, mode.ref, root, ignorePatterns)
+      ? computeSinceTargets(model, mode.ref, root, sourceDirectory, ignorePatterns)
       : mode.kind === "path"
         ? computePathTargets(model, mode.path, root, cwd)
         : undefined;
@@ -101,15 +104,16 @@ function isDescendantOrSame(source: string, directory: string): boolean {
   return relativePath !== "" && !relativePath.startsWith("..") && !relativePath.startsWith("/");
 }
 
-function forceRescan(root: string, ignorePatterns: readonly string[]): { model: CanonicalComponentModel; rescanned: boolean } {
-  return { model: rescanAndPersist(root, ignorePatterns), rescanned: true };
+function forceRescan(root: string, sourceDirectory: string, ignorePatterns: readonly string[]): { model: CanonicalComponentModel; rescanned: boolean } {
+  return { model: rescanAndPersist(root, sourceDirectory, ignorePatterns), rescanned: true };
 }
 
 function incrementalScan(
   root: string,
+  sourceDirectory: string,
   ignorePatterns: readonly string[],
 ): { model: CanonicalComponentModel; rescanned: boolean } {
-  const sourceFiles = findSourceFiles(root, ignorePatterns);
+  const sourceFiles = findSourceFiles(root, ignorePatterns, sourceDirectory);
   const currentHashes = hashSourceFiles(root, sourceFiles);
   const currentFingerprint = computeScanFingerprint({ root, sourceHashes: currentHashes, ignorePatterns });
   const detection = detectChangedSourceFiles(currentHashes, currentFingerprint, readScanStateCache(root));
@@ -123,13 +127,13 @@ function incrementalScan(
     // recover safely by rescanning rather than trusting a partial cache state.
   }
 
-  const model = rescanAndPersist(root, ignorePatterns);
+  const model = rescanAndPersist(root, sourceDirectory, ignorePatterns);
   writeScanStateCache(root, { version: 2, sourceHashes: currentHashes, fingerprint: currentFingerprint });
   return { model, rescanned: true };
 }
 
-function rescanAndPersist(root: string, ignorePatterns: readonly string[]): CanonicalComponentModel {
-  const model = runComponentScan(root, ignorePatterns);
+function rescanAndPersist(root: string, sourceDirectory: string, ignorePatterns: readonly string[]): CanonicalComponentModel {
+  const model = runComponentScan(root, ignorePatterns, sourceDirectory);
   writeComponentScanCache(root, model);
   writeScanIndex(root, projectHumanScan(model));
   writeAccessibilityIndex(root, projectAccessibility(model));
@@ -159,11 +163,12 @@ function computeSinceTargets(
   model: CanonicalComponentModel,
   ref: string,
   root: string,
+  sourceDirectory: string,
   ignorePatterns: readonly string[],
 ): { readonly targetComponentIds: ReadonlySet<string> | undefined; readonly selection: LintTargetSelectionInfo } {
   const changedFiles = getChangedFileDetailsSince(ref, root);
   const discoverableSourceFiles = new Set(
-    findSourceFiles(root, ignorePatterns).map((file) => toPortablePath(relative(root, file))),
+    findSourceFiles(root, ignorePatterns, sourceDirectory).map((file) => toPortablePath(relative(root, file))),
   );
 
   const componentIdsByDeclaringFile = new Map<string, string[]>();
