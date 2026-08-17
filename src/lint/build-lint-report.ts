@@ -264,17 +264,25 @@ async function buildComponentReport(
     maxStates,
   });
 
-  if (plan.status !== "ready" || engines.length === 0) {
+  if (plan.status !== "ready") {
     return toComponentReport(component, plan, maxStates, new Map());
   }
 
   const activeRules = resolveActiveRules(resolveRulesForFile({ rules: config.rules, overrides: config.overrides }, component.source));
   const selectedStates = execution.stateIds === undefined ? plan.states : plan.states.filter((state) => execution.stateIds?.includes(state.id));
+  if (engines.length === 0) {
+    return toComponentReport(component, { ...plan, states: selectedStates }, maxStates, new Map(), {
+      outcomeReason: "unavailable",
+      reason: "No accessibility engine is enabled, so these states could not be evaluated.",
+    });
+  }
   let plannedChecks = planChecksForComponent({ component, accessibility, states: selectedStates, activeRules });
   if (execution.checkIds !== undefined) plannedChecks = plannedChecks.filter((check) => execution.checkIds?.includes(check.checkId));
 
   if (plannedChecks.length === 0) {
-    return toComponentReport(component, plan, maxStates, new Map());
+    return toComponentReport(component, { ...plan, states: selectedStates }, maxStates, new Map(), activeRules.size === 0
+      ? { outcomeReason: "not-applicable", reason: "No accessibility rule is enabled for this component." }
+      : { outcomeReason: "not-applicable", reason: "No enabled accessibility check applies to this component's analyzed structure." });
   }
 
   // Only launch/reuse the runtime when a capability-matched engine will
@@ -391,6 +399,10 @@ function toComponentReport(
   plan: ComponentStatePlan,
   maxStates: number,
   checksByState: ReadonlyMap<string, readonly CheckResult[]>,
+  emptyStateDiagnostic: Pick<StateReport, "outcomeReason" | "reason"> = {
+    outcomeReason: "not-applicable",
+    reason: "No accessibility check produced a result for this state.",
+  },
 ): ComponentReport {
   const base = {
     componentId: component.id,
@@ -440,7 +452,7 @@ function toComponentReport(
       // "review" whenever nothing was actually verified for this state
       // (empty `checks`): never a fabricated "pass".
       status: aggregateCheckStatus(checks),
-      ...(checks.length === 0 ? { outcomeReason: "not-applicable" as const } : {}),
+      ...(checks.length === 0 ? emptyStateDiagnostic : {}),
     };
   });
 
@@ -497,7 +509,14 @@ function projectComponentForStandard(
     if (checks.length === state.checks.length) {
       return state;
     }
-    return { ...state, checks, status: aggregateCheckStatus(checks) };
+    return {
+      ...state,
+      checks,
+      status: aggregateCheckStatus(checks),
+      ...(checks.length === 0
+        ? { outcomeReason: "not-applicable" as const, reason: `No check mapped to ${standard} produced a result for this state.` }
+        : { outcomeReason: undefined, reason: undefined }),
+    };
   });
 
   if (states.every((state, index) => state === component.states[index])) {

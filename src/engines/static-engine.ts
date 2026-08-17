@@ -55,7 +55,7 @@ export function createStaticEngine(): Engine {
         message: `"${check.component}" exposes an accessible-name-capable prop (${check.accessibility.accessibleNameSources.join(", ")}); static analysis cannot confirm one is actually supplied at runtime.`,
         location,
         engine,
-        outcomeReason: "inconclusive",
+        outcomeReason: "manual-review",
         reason: "Static evidence only proves the capability exists, not that a name is populated for any given usage — verify manually or enable rendered evaluation.",
         evidence: [{ kind: "observation", name: "accessibleNameSources", value: check.accessibility.accessibleNameSources }],
         durationMs: 0,
