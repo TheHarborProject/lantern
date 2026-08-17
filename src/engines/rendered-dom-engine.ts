@@ -26,6 +26,7 @@ interface KeyboardAccessProbeResult {
   readonly enabledInteractiveCount: number;
   readonly tabbableCount: number;
   readonly disabledInteractiveCount: number;
+  readonly element: { readonly selector: string; readonly html: string; readonly tabIndex: number; readonly disabled: boolean; readonly hidden: boolean; readonly inert: boolean } | null;
 }
 
 export function createRenderedDomEngine(): Engine {
@@ -93,33 +94,59 @@ export function createRenderedDomEngine(): Engine {
               usableInteractiveCount: usable.length,
               enabledInteractiveCount: enabled.length,
               tabbableCount: tabbable.length,
-              disabledInteractiveCount: disabled.length
+              disabledInteractiveCount: disabled.length,
+              element: candidates.length === 0 ? null : (function () {
+                var element = candidates[0];
+                return {
+                  selector: element.id ? "#" + element.id : element.tagName.toLowerCase(),
+                  html: element.outerHTML.slice(0, 500),
+                  tabIndex: element.tabIndex,
+                  disabled: element.matches(":disabled"),
+                  hidden: Boolean(element.closest("[hidden]")),
+                  inert: Boolean(element.closest("[inert]"))
+                };
+              })()
             };
           })()`,
         ),
       );
 
+      const evidence = keyboardEvidence(probe);
+
       if (probe.usableInteractiveCount === 0) {
         return {
+          checkId: check.checkId,
+          componentId: check.componentId,
+          stateId: check.stateId,
           ruleId: check.ruleId,
           severity: check.severity,
           status: "fail",
           message: `"${check.component}" is identified as interactive but rendered no visible, usable interactive element.`,
           location,
           engine,
+          evidence,
+          durationMs: 0,
         };
       }
       if (probe.enabledInteractiveCount > 0 && probe.tabbableCount === 0) {
         return {
+          checkId: check.checkId,
+          componentId: check.componentId,
+          stateId: check.stateId,
           ruleId: check.ruleId,
           severity: check.severity,
           status: "fail",
           message: `"${check.component}" rendered an enabled interactive element, but none are in the sequential keyboard focus order.`,
           location,
           engine,
+          evidence,
+          durationMs: 0,
         };
       }
       return {
+        checkId: check.checkId,
+        componentId: check.componentId,
+        stateId: check.stateId,
         ruleId: check.ruleId,
         severity: check.severity,
         status: "pass",
@@ -129,7 +156,27 @@ export function createRenderedDomEngine(): Engine {
             : `"${check.component}" rendered only disabled interactive elements, correctly excluding them from the sequential keyboard focus order.`,
         location,
         engine,
+        evidence,
+        durationMs: 0,
       };
     },
   };
+}
+
+function keyboardEvidence(probe: KeyboardAccessProbeResult): CheckResult["evidence"] {
+  const element = probe.element ?? null;
+  return [
+    ...(element === null ? [] : [
+      { kind: "element" as const, selector: element.selector, html: element.html },
+      { kind: "observation" as const, name: "tabIndex", value: element.tabIndex },
+      { kind: "observation" as const, name: "disabled", value: element.disabled },
+      { kind: "observation" as const, name: "hidden", value: element.hidden },
+      { kind: "observation" as const, name: "inert", value: element.inert },
+    ]),
+    {
+      kind: "expectation" as const,
+      expected: "enabled interactive element participates in sequential keyboard focus order",
+      observed: probe.tabbableCount > 0 ? "participates" : probe.enabledInteractiveCount > 0 ? "excluded" : "disabled",
+    },
+  ];
 }

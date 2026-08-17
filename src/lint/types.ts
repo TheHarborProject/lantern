@@ -13,6 +13,36 @@ import type { PropValueSource, UnresolvedProp } from "../state-planning/types.js
 /** The outcome of one executed check: independent from its configured severity. */
 export type CheckStatus = "pass" | "fail" | "review";
 
+export type RunStatus = "running" | "completed" | "failed" | "cancelled";
+
+export type OutcomeReason =
+  | "unsupported"
+  | "unavailable"
+  | "inconclusive"
+  | "manual-review"
+  | "not-applicable"
+  | "skipped"
+  | "partial-analysis"
+  | "operational-error";
+
+export interface SourceLocation {
+  readonly file: string;
+  readonly line?: number | undefined;
+  readonly column?: number | undefined;
+  readonly endLine?: number | undefined;
+  readonly endColumn?: number | undefined;
+}
+
+export type EvidenceValue = string | number | boolean | null | readonly EvidenceValue[] | { readonly [key: string]: EvidenceValue };
+
+export type EvidenceRecord =
+  | { readonly kind: "observation"; readonly name: string; readonly value: EvidenceValue }
+  | { readonly kind: "expectation"; readonly expected: string; readonly observed: string }
+  | { readonly kind: "element"; readonly selector?: string | undefined; readonly html?: string | undefined }
+  | { readonly kind: "attribute"; readonly name: string; readonly value: EvidenceValue }
+  | { readonly kind: "source"; readonly location: SourceLocation }
+  | { readonly kind: "capability"; readonly required: string; readonly attempts: readonly { readonly engine: string; readonly reason: string }[] };
+
 /** Aggregate status at state/component level; adds `skipped` for planning outcomes. */
 export type ReportStatus = CheckStatus | "skipped";
 
@@ -25,23 +55,30 @@ export type StatePropProvenance = Readonly<Record<string, PropValueSource>>;
  * is coupled to axe, Lighthouse, or any other concrete engine.
  */
 export interface CheckResult {
+  readonly checkId: string;
+  readonly componentId: string;
+  readonly stateId: string;
   /** Lantern-owned rule id, e.g. `lantern/accessible-name`. */
   readonly ruleId: string;
   /** Configured severity for this rule (`off` never reaches this model). */
   readonly severity: Exclude<Severity, "off">;
   readonly status: CheckStatus;
   readonly message?: string | undefined;
-  readonly location?: { readonly file: string; readonly line?: number; readonly column?: number } | undefined;
+  readonly location?: SourceLocation | undefined;
   /** Runtime/engine provenance, when a concrete engine produced this result. */
   readonly engine?:
     | { readonly name: string; readonly version?: string | undefined; readonly nativeRuleId?: string | undefined }
     | undefined;
   /** Why a `review` (or otherwise inconclusive) status was produced. */
+  readonly outcomeReason?: OutcomeReason | undefined;
   readonly reason?: string | undefined;
+  readonly evidence: readonly EvidenceRecord[];
+  readonly durationMs: number;
 }
 
 /** One generated, independently reportable component state (RFC-006). */
 export interface StateReport {
+  readonly componentId: string;
   readonly stateId: string;
   readonly props: Readonly<Record<string, unknown>>;
   readonly propProvenance: StatePropProvenance;
@@ -49,6 +86,7 @@ export interface StateReport {
   readonly checks: readonly CheckResult[];
   /** `"review"` whenever `checks` is empty: nothing was actually verified. */
   readonly status: ReportStatus;
+  readonly outcomeReason?: OutcomeReason | undefined;
 }
 
 export interface StateDimensionReport {
@@ -68,6 +106,7 @@ export interface ComponentReport {
   readonly planStatus: PlanStatus;
   /** Aggregate report status; `unresolved` and explicit `skip` both report as `"skipped"`. */
   readonly status: ReportStatus;
+  readonly outcomeReason?: OutcomeReason | undefined;
   readonly states: readonly StateReport[];
   readonly dimensions?: readonly StateDimensionReport[] | undefined;
   readonly unresolvedProps?: readonly UnresolvedProp[] | undefined;
@@ -129,8 +168,15 @@ export type LintTargetSelectionInfo =
   | { readonly kind: "fallback"; readonly reason: string; readonly details?: readonly string[] | undefined };
 
 export interface LintDiagnostic {
+  readonly code: string;
+  readonly severity: "info" | "warning" | "error";
+  readonly scope: "run" | "component" | "state" | "check" | "engine";
   readonly source: string;
   readonly component?: string | undefined;
+  readonly componentId?: string | undefined;
+  readonly stateId?: string | undefined;
+  readonly checkId?: string | undefined;
+  readonly engine?: { readonly name: string; readonly version?: string | undefined } | undefined;
   readonly message: string;
 }
 
@@ -140,10 +186,19 @@ export type ProviderStatus =
 
 /** The full structured `lantern lint` result (RFC-007). */
 export interface LintReport {
-  readonly version: 2;
+  readonly version: 3;
+  readonly runId: string;
+  readonly startedAt: string;
+  readonly finishedAt: string;
+  readonly status: Exclude<RunStatus, "running">;
   readonly generatedAt: string;
   readonly targeting: LintTargetingInfo;
   readonly provider?: ProviderStatus | undefined;
+  readonly engines: readonly { readonly id: string; readonly version: string; readonly capabilities: readonly string[] }[];
+  readonly config: {
+    readonly standards: readonly string[];
+    readonly rules: Readonly<Record<string, string>>;
+  };
   readonly diagnostics?: readonly LintDiagnostic[] | undefined;
   readonly standards: readonly StandardReport[];
   readonly summary: LintSummary;

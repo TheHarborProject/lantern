@@ -31,18 +31,36 @@ export async function executePlannedChecks(
       executed.push({ check, result: unsupportedResult(check, matched.reason) });
       continue;
     }
+    const startedAt = Date.now();
     const result = await matched.engine.execute(check, contextFor(check));
-    executed.push({ check, result });
+    executed.push({ check, result: { ...result, durationMs: Date.now() - startedAt } });
   }
   return executed;
 }
 
 function unsupportedResult(check: PlannedCheck, reason: string): CheckResult {
   return {
+    checkId: check.checkId,
+    componentId: check.componentId,
+    stateId: check.stateId,
     ruleId: check.ruleId,
     severity: check.severity,
     status: "review",
+    outcomeReason: "unsupported",
     message: `"${check.ruleId}" could not be automatically evaluated for "${check.component}".`,
     reason,
+    evidence: [{ kind: "capability", required: check.requiredCapability, attempts: parseAttempts(reason) }],
+    durationMs: 0,
   };
+}
+
+function parseAttempts(reason: string): readonly { readonly engine: string; readonly reason: string }[] {
+  const details = reason.match(/\((.*)\)\.$/)?.[1];
+  if (details === undefined) return [];
+  return details.split("; ").map((attempt) => {
+    const separator = attempt.indexOf(": ");
+    return separator < 0
+      ? { engine: "unknown", reason: attempt }
+      : { engine: attempt.slice(0, separator), reason: attempt.slice(separator + 2) };
+  });
 }

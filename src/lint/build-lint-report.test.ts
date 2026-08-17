@@ -69,6 +69,11 @@ describe("buildLintReport", () => {
 
     const report = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" } });
 
+    expect(report).toMatchObject({ version: 3, status: "completed" });
+    expect(report.runId).not.toBe("");
+    expect(Date.parse(report.finishedAt)).toBeGreaterThanOrEqual(Date.parse(report.startedAt));
+    expect(report.engines.map((engine) => engine.id)).toEqual(["lantern-static", "lantern-rendered-dom"]);
+
     expect(report.standards).toHaveLength(1);
     const button = report.standards[0]?.components[0];
     expect(button?.component).toBe("Button");
@@ -265,6 +270,8 @@ describe("buildLintReport", () => {
     const button = report.standards[0]?.components[0];
     const check = button?.states[0]?.checks[0];
     expect(check?.status).toBe("review");
+    expect(check?.outcomeReason).toBe("unsupported");
+    expect(check?.evidence[0]).toMatchObject({ kind: "capability", required: "rendered-dom" });
     expect(check?.reason).toBeDefined();
     expect(button?.status).toBe("review");
   });
@@ -364,6 +371,45 @@ describe("buildLintReport", () => {
     expect(button?.states[1]?.checks[0]?.message).toContain(
       "none are in the sequential keyboard focus order",
     );
+    const failedCheck = button?.states[1]?.checks[0];
+    expect(typeof failedCheck?.checkId).toBe("string");
+    expect(failedCheck?.componentId).toBe(button?.componentId);
+    expect(failedCheck?.stateId).toBe(button?.states[1]?.stateId);
+    expect(typeof failedCheck?.durationMs).toBe("number");
+    expect(button?.states[1]?.checks[0]?.evidence).toContainEqual(expect.objectContaining({ kind: "expectation", observed: "excluded" }));
+  });
+
+  it("supports canonical component-ID selection and rejects unknown IDs", async () => {
+    writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
+    writeFileSync(join(root, "Label.tsx"), "export const Label = () => <label />;");
+    const all = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" } });
+    const buttonId = all.standards[0]?.components.find((component) => component.component === "Button")?.componentId;
+    const selected = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" }, componentIds: [buttonId!] });
+    expect(selected.standards[0]?.components.map((component) => component.component)).toEqual(["Button"]);
+    const invalid = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" }, componentIds: ["missing#Thing"] });
+    expect(invalid.status).toBe("failed");
+    expect(invalid.diagnostics?.[0]?.message).toContain("Unknown canonical component ID");
+  });
+
+  it("emits correlated deterministic lifecycle events and supports cancellation", async () => {
+    writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
+    const types: string[] = [];
+    const report = await buildLintReport({ config: resolvedConfig(root, { rules: { "lantern/accessible-name": "error" } }), mode: { kind: "incremental" }, events: (event) => { types.push(event.type); } });
+    expect(types).toEqual(["run-started", "component-started", "state-started", "check-started", "check-completed", "state-completed", "component-completed", "run-completed"]);
+    expect(report.status).toBe("completed");
+
+    const controller = new AbortController();
+    controller.abort();
+    const cancelledTypes: string[] = [];
+    const cancelled = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" }, signal: controller.signal, events: (event) => { cancelledTypes.push(event.type); } });
+    expect(cancelled.status).toBe("cancelled");
+    expect(cancelledTypes).toEqual(["run-started", "diagnostic", "run-cancelled"]);
+  });
+
+  it("preserves provenance for fixed configured props", async () => {
+    writeFileSync(join(root, "Button.tsx"), "type Props = { label: string }; export const Button = ({ label }: Props) => <button>{label}</button>;");
+    const report = await buildLintReport({ config: resolvedConfig(root, { components: { Button: { props: { label: { values: ["Save"] } } } } }), mode: { kind: "incremental" } });
+    expect(report.standards[0]?.components[0]?.states[0]?.propProvenance).toEqual({ label: "explicit" });
   });
 
   it("does not launch a runtime for a rendered-dom rule no engine actually supports", async () => {
@@ -380,16 +426,18 @@ describe("buildLintReport", () => {
     expect(report.standards[0]?.components[0]?.states[0]?.checks[0]?.status).toBe("review");
   });
 
-  it("propagates a genuine engine/runtime failure instead of fabricating a check outcome", async () => {
+  it("captures a genuine engine/runtime failure as a structured failed run", async () => {
     writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
     const launch = vi.fn(() => Promise.reject(new Error("no browser binary available")));
 
-    await expect(
-      buildLintReport({
+    const report = await buildLintReport({
         config: resolvedConfig(root, { rules: { "lantern/keyboard-access": "error" } }),
         mode: { kind: "incremental" },
         launch,
-      }),
-    ).rejects.toThrow("no browser binary available");
+      });
+
+    expect(report.status).toBe("failed");
+    expect(report.diagnostics?.[0]).toMatchObject({ code: "OPERATIONAL_ERROR", severity: "error" });
+    expect(report.diagnostics?.[0]?.message).toContain("no browser binary available");
   });
 });

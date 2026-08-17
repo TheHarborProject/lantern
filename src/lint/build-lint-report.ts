@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import type { Browser } from "playwright";
 import { resolveRulesForFile } from "../config/resolve/resolve-rules-for-file.js";
 import { createLintExecutionSession } from "../component-runtime/runtime-session.js";
@@ -31,6 +32,7 @@ import type {
   StatePropProvenance,
   StateReport,
 } from "./types.js";
+import { AuditCancelledError, throwIfCancelled, type AuditEventSink } from "./events.js";
 
 export interface BuildLintReportOptions {
   readonly config: ResolvedConfig;
@@ -42,6 +44,11 @@ export interface BuildLintReportOptions {
   readonly bundle?: ComponentBundler | undefined;
   /** Injected browser launcher, for tests; defaults to headless Chromium. */
   readonly launch?: (() => Promise<Browser>) | undefined;
+  readonly componentIds?: readonly string[] | undefined;
+  readonly stateIds?: readonly string[] | undefined;
+  readonly checkIds?: readonly string[] | undefined;
+  readonly signal?: AbortSignal | undefined;
+  readonly events?: AuditEventSink | undefined;
 }
 
 /**
@@ -54,12 +61,33 @@ export interface BuildLintReportOptions {
  * if a planned check actually needs it.
  */
 export async function buildLintReport(options: BuildLintReportOptions): Promise<LintReport> {
+  const runId = randomUUID();
+  const startedAt = new Date().toISOString();
+  await options.events?.({ type: "run-started", runId, timestamp: startedAt });
+  try {
+    const report = await buildSuccessfulLintReport(options, runId, startedAt);
+    await options.events?.({ type: "run-completed", runId, timestamp: report.finishedAt, report });
+    return report;
+  } catch (error) {
+    const cancelled = error instanceof AuditCancelledError || options.signal?.aborted === true;
+    const finishedAt = new Date().toISOString();
+    const diagnostic = operationalDiagnostic(error, cancelled);
+    const report = failedReport(options, runId, startedAt, finishedAt, cancelled, diagnostic);
+    await options.events?.({ type: "diagnostic", runId, timestamp: finishedAt, diagnostic });
+    await options.events?.({ type: cancelled ? "run-cancelled" : "run-failed", runId, timestamp: finishedAt, report });
+    return report;
+  }
+}
+
+async function buildSuccessfulLintReport(options: BuildLintReportOptions, runId: string, startedAtIso: string): Promise<LintReport> {
   const { config, mode, maxStates = DEFAULT_MAX_STATES, cwd } = options;
   const startedAt = Date.now();
+  throwIfCancelled(options.signal);
 
   const targets = resolveLintTargets({ root: config.project.root, cwd, ignorePatterns: config.ignorePatterns, mode });
   const accessibilityById = indexAccessibility(targets.model);
-  const includedComponents = filterComponents(targets.model, targets.targetComponentIds);
+  const requestedIds = validateSelection(options, targets.model);
+  const includedComponents = filterComponents(targets.model, requestedIds ?? targets.targetComponentIds);
   const configResolution = resolveComponentConfigs(includedComponents, config);
 
   const engines = createEnabledEngines(config.engines);
@@ -77,6 +105,8 @@ export async function buildLintReport(options: BuildLintReportOptions): Promise<
     // Sequential by design (RFC-008 defers concurrency): normalized result
     // ordering must never depend on browser/engine completion order.
     for (const component of includedComponents) {
+      throwIfCancelled(options.signal);
+      await options.events?.({ type: "component-started", runId, timestamp: new Date().toISOString(), componentId: component.id });
       const report = await buildComponentReport(
         component,
         accessibilityById,
@@ -85,8 +115,10 @@ export async function buildLintReport(options: BuildLintReportOptions): Promise<
         configResolution.configsById,
         engines,
         session,
+        { runId, signal: options.signal, events: options.events, stateIds: options.stateIds, checkIds: options.checkIds },
       );
       componentReports.push(report);
+      await options.events?.({ type: "component-completed", runId, timestamp: new Date().toISOString(), component: report });
     }
   } finally {
     await session.close();
@@ -106,13 +138,23 @@ export async function buildLintReport(options: BuildLintReportOptions): Promise<
     components: componentsForStandard(componentReports, standard, ruleStandards),
   }));
 
+  const finishedAt = new Date().toISOString();
   return {
-    version: 2,
-    generatedAt: new Date(startedAt).toISOString(),
+    version: 3,
+    runId,
+    startedAt: startedAtIso,
+    finishedAt,
+    status: "completed",
+    generatedAt: startedAtIso,
     targeting: { mode, rescanned: targets.rescanned, selection: targets.selection },
     provider: describeProvider(engines),
+    engines: engines.map((engine) => ({ ...engine.identity, capabilities: engine.capabilities })),
+    config: { standards: config.standards, rules: snapshotRules(config.rules) },
     diagnostics: [
       ...targets.model.diagnostics.map((diagnostic): LintDiagnostic => ({
+        code: "COMPONENT_ANALYSIS",
+        severity: "warning",
+        scope: "component",
         source: diagnostic.source,
         component: diagnostic.exportName,
         message: diagnostic.message,
@@ -156,6 +198,7 @@ async function buildComponentReport(
   configsById: ReadonlyMap<string, NonNullable<ResolvedConfig["components"][string]>>,
   engines: readonly Engine[],
   session: LintExecutionSession,
+  execution: { readonly runId: string; readonly signal?: AbortSignal | undefined; readonly events?: AuditEventSink | undefined; readonly stateIds?: readonly string[] | undefined; readonly checkIds?: readonly string[] | undefined },
 ): Promise<ComponentReport> {
   const accessibility = accessibilityById.get(component.id) ?? emptyAccessibility(component);
   const componentConfig = configsById.get(component.id);
@@ -173,7 +216,9 @@ async function buildComponentReport(
   }
 
   const activeRules = resolveActiveRules(resolveRulesForFile({ rules: config.rules, overrides: config.overrides }, component.source));
-  const plannedChecks = planChecksForComponent({ component, accessibility, states: plan.states, activeRules });
+  const selectedStates = execution.stateIds === undefined ? plan.states : plan.states.filter((state) => execution.stateIds?.includes(state.id));
+  let plannedChecks = planChecksForComponent({ component, accessibility, states: selectedStates, activeRules });
+  if (execution.checkIds !== undefined) plannedChecks = plannedChecks.filter((check) => execution.checkIds?.includes(check.checkId));
 
   if (plannedChecks.length === 0) {
     return toComponentReport(component, plan, maxStates, new Map());
@@ -189,22 +234,39 @@ async function buildComponentReport(
   });
   const runtime = requiresRuntime ? await session.componentRuntime(runtimeTarget(component, config)) : undefined;
 
-  const executed = await executePlannedChecks(plannedChecks, engines, () => ({ runtime }));
-
   const checksByState = new Map<string, CheckResult[]>();
-  for (const { check, result } of executed) {
-    if (check.stateId === undefined) {
-      continue;
+  for (const state of selectedStates) {
+    throwIfCancelled(execution.signal);
+    await execution.events?.({ type: "state-started", runId: execution.runId, timestamp: new Date().toISOString(), componentId: component.id, stateId: state.id });
+    const stateChecks = plannedChecks.filter((check) => check.stateId === state.id);
+    for (const check of stateChecks) {
+      throwIfCancelled(execution.signal);
+      await execution.events?.({ type: "check-started", runId: execution.runId, timestamp: new Date().toISOString(), componentId: component.id, stateId: state.id, checkId: check.checkId, ruleId: check.ruleId });
+      const [executed] = await executePlannedChecks([check], engines, () => ({ runtime }));
+      throwIfCancelled(execution.signal);
+      if (executed !== undefined) {
+        (checksByState.get(state.id) ?? (checksByState.set(state.id, []), checksByState.get(state.id)!)).push(executed.result);
+        await execution.events?.({ type: "check-completed", runId: execution.runId, timestamp: new Date().toISOString(), result: executed.result });
+      }
     }
-    const existing = checksByState.get(check.stateId);
-    if (existing === undefined) {
-      checksByState.set(check.stateId, [result]);
-    } else {
-      existing.push(result);
-    }
+    await execution.events?.({
+      type: "state-completed",
+      runId: execution.runId,
+      timestamp: new Date().toISOString(),
+      state: {
+        componentId: component.id,
+        stateId: state.id,
+        props: state.props,
+        propProvenance: buildProvenance(plan.dimensions, plan.fixedProps),
+        checks: checksByState.get(state.id) ?? [],
+        status: aggregateCheckStatus(checksByState.get(state.id) ?? []),
+        ...((checksByState.get(state.id)?.length ?? 0) === 0 ? { outcomeReason: "not-applicable" as const } : {}),
+      },
+    });
   }
 
-  return toComponentReport(component, plan, maxStates, checksByState);
+  const report = toComponentReport(component, { ...plan, states: selectedStates }, maxStates, checksByState);
+  return report;
 }
 
 function runtimeTarget(component: CanonicalComponent, config: ResolvedConfig): IsolationComponentTarget {
@@ -242,6 +304,9 @@ function resolveComponentConfigs(
       configsById.set(matchingIds[0] ?? "", componentConfig);
     } else if (matchingIds.length > 1) {
       diagnostics.push({
+        code: "AMBIGUOUS_COMPONENT_CONFIG",
+        severity: "warning",
+        scope: "component",
         source: "lantern.config.json",
         component: key,
         message: `Component config key "${key}" is ambiguous; use one of: ${matchingIds.join(", ")}.`,
@@ -269,6 +334,7 @@ function toComponentReport(
       ...base,
       planStatus: "skipped",
       status: "skipped",
+      outcomeReason: "skipped",
       states: [],
       dimensions: [],
       reason: "Explicitly skipped in configuration.",
@@ -283,6 +349,7 @@ function toComponentReport(
       ...base,
       planStatus: "unresolved",
       status: "skipped",
+      outcomeReason: "unavailable",
       states: [],
       dimensions: [],
       unresolvedProps: plan.unresolvedProps,
@@ -297,12 +364,14 @@ function toComponentReport(
     const checks = checksByState.get(state.id) ?? [];
     return {
       stateId: state.id,
+      componentId: component.id,
       props: state.props,
-      propProvenance: buildProvenance(plan.dimensions),
+      propProvenance: buildProvenance(plan.dimensions, plan.fixedProps),
       checks,
       // "review" whenever nothing was actually verified for this state
       // (empty `checks`): never a fabricated "pass".
       status: aggregateCheckStatus(checks),
+      ...(checks.length === 0 ? { outcomeReason: "not-applicable" as const } : {}),
     };
   });
 
@@ -368,9 +437,9 @@ function projectComponentForStandard(
   return { ...component, states, status: aggregateStatus(states.map((state) => state.status)) };
 }
 
-function buildProvenance(dimensions: readonly ResolvedPropValues[]): StatePropProvenance {
+function buildProvenance(dimensions: readonly ResolvedPropValues[], fixed: readonly ResolvedPropValues[] = []): StatePropProvenance {
   const provenance: Record<string, ResolvedPropValues["source"]> = {};
-  for (const dimension of dimensions) {
+  for (const dimension of [...dimensions, ...fixed]) {
     provenance[dimension.name] = dimension.source;
   }
   return provenance;
@@ -423,6 +492,49 @@ function emptyAccessibility(component: CanonicalComponent): AccessibilityCompone
     ariaProps: [],
     stateProps: [],
     runtimeAnalysisRequired: true,
+  };
+}
+
+function validateSelection(options: BuildLintReportOptions, model: CanonicalComponentModel): ReadonlySet<string> | undefined {
+  if (options.stateIds !== undefined || options.checkIds !== undefined) {
+    throw new Error("State/check ID selection is declared but not supported by RFC-009 execution; select canonical component IDs instead.");
+  }
+  if (options.componentIds === undefined) return undefined;
+  const known = new Set(model.components.map((component) => component.id));
+  const unknown = options.componentIds.filter((id) => !known.has(id));
+  if (unknown.length > 0) throw new Error(`Unknown canonical component ID${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`);
+  return new Set(options.componentIds);
+}
+
+function snapshotRules(rules: ResolvedConfig["rules"]): Readonly<Record<string, string>> {
+  return Object.fromEntries(Object.entries(rules).map(([id, value]) => [id, Array.isArray(value) ? value[0] : value]));
+}
+
+function operationalDiagnostic(error: unknown, cancelled: boolean): LintDiagnostic {
+  return {
+    code: cancelled ? "AUDIT_CANCELLED" : "OPERATIONAL_ERROR",
+    severity: cancelled ? "warning" : "error",
+    scope: "run",
+    source: "lantern",
+    message: error instanceof Error ? error.message : String(error),
+  };
+}
+
+function failedReport(options: BuildLintReportOptions, runId: string, startedAt: string, finishedAt: string, cancelled: boolean, diagnostic: LintDiagnostic): LintReport {
+  return {
+    version: 3,
+    runId,
+    startedAt,
+    finishedAt,
+    status: cancelled ? "cancelled" : "failed",
+    generatedAt: startedAt,
+    targeting: { mode: options.mode, rescanned: false },
+    provider: { kind: "unavailable", reason: "Audit did not complete." },
+    engines: [],
+    config: { standards: options.config.standards, rules: snapshotRules(options.config.rules) },
+    diagnostics: [diagnostic],
+    standards: options.config.standards.map((standard) => ({ standard, components: [] })),
+    summary: { componentsPass: 0, componentsFail: 0, componentsReview: 0, componentsSkipped: 0, checksPass: 0, checksFail: 0, checksReview: 0, durationMs: Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt)) },
   };
 }
 

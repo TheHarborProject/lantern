@@ -27,6 +27,12 @@
   "bin": {
     "lantern": "dist/index.js"
   },
+  "exports": {
+    "./api": {
+      "types": "./dist/public-api.d.ts",
+      "import": "./dist/public-api.js"
+    }
+  },
   "files": [
     "dist",
     "README.md",

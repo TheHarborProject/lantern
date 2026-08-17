@@ -4,6 +4,7 @@ import type { ComponentReport, LintReport, StateReport } from "./types.js";
 
 function state(overrides: Partial<StateReport> = {}): StateReport {
   return {
+    componentId: "Button.tsx#Button",
     stateId: "Button.tsx#Button#abc",
     props: {},
     propProvenance: {},
@@ -30,9 +31,15 @@ function component(overrides: Partial<ComponentReport> = {}): ComponentReport {
 
 function report(components: readonly ComponentReport[]): LintReport {
   return {
-    version: 2,
+    version: 3,
+    runId: "run-1",
+    startedAt: new Date(0).toISOString(),
+    finishedAt: new Date(0).toISOString(),
+    status: "completed",
     generatedAt: new Date(0).toISOString(),
     targeting: { mode: { kind: "incremental" }, rescanned: true },
+    engines: [],
+    config: { standards: ["wcag22-aa"], rules: {} },
     standards: [{ standard: "wcag22-aa", components }],
     summary: {
       componentsPass: 0,
@@ -58,7 +65,7 @@ describe("computeExitCode", () => {
     const failing = component({
       states: [
         state({
-          checks: [{ ruleId: "lantern/color-contrast", severity: "error", status: "fail" }],
+          checks: [{ checkId: "check-1", componentId: "Button.tsx#Button", stateId: "Button.tsx#Button#abc", ruleId: "lantern/color-contrast", severity: "error", status: "fail", evidence: [], durationMs: 0 }],
           status: "fail",
         }),
       ],
@@ -72,7 +79,7 @@ describe("computeExitCode", () => {
     const warning = component({
       states: [
         state({
-          checks: [{ ruleId: "lantern/focus-visible", severity: "warn", status: "fail" }],
+          checks: [{ checkId: "check-2", componentId: "Button.tsx#Button", stateId: "Button.tsx#Button#abc", ruleId: "lantern/focus-visible", severity: "warn", status: "fail", evidence: [], durationMs: 0 }],
           status: "fail",
         }),
       ],

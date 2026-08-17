@@ -23,6 +23,7 @@ function accessibility(overrides: Partial<AccessibilityComponent> = {}): Accessi
 
 function check(overrides: Partial<PlannedCheck> = {}): PlannedCheck {
   return {
+    checkId: "check-1",
     ruleId: "lantern/keyboard-access",
     severity: "error",
     componentId: "Button.tsx#Button",
@@ -102,6 +103,7 @@ describe("createRenderedDomEngine", () => {
 
     expect(result.status).toBe("pass");
     expect(result.message).toContain("sequential keyboard focus order");
+    expect(result.evidence).toContainEqual({ kind: "observation", name: "tabIndex", value: 0 });
     expect(result.engine).toEqual({ name: "lantern-rendered-dom", version: "1.0.0" });
   });
 
@@ -113,6 +115,7 @@ describe("createRenderedDomEngine", () => {
     });
 
     expect(result.status).toBe("fail");
+    expect(result.evidence).toContainEqual({ kind: "observation", name: "tabIndex", value: -1 });
     expect(result.message).toContain("none are in the sequential keyboard focus order");
   });
 
@@ -124,6 +127,7 @@ describe("createRenderedDomEngine", () => {
     });
 
     expect(result.status).toBe("pass");
+    expect(result.evidence).toContainEqual({ kind: "observation", name: "disabled", value: true });
     expect(result.message).toContain("only disabled interactive elements");
   });
 

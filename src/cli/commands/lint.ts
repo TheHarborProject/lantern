@@ -53,6 +53,14 @@ Examples:
         const config = loadConfig({ cwd: process.cwd(), explicitPath: globalOptions.config });
         const report = await buildLintReport({ config, mode, cwd: process.cwd() });
 
+        if (report.status === "failed" || report.status === "cancelled") {
+          for (const diagnostic of report.diagnostics ?? []) {
+            console.error(`Error: ${diagnostic.message}`);
+          }
+          process.exitCode = 2;
+          return;
+        }
+
         if (options.configure === true) {
           await runConfigure(config.configFilePath, report);
           return;
