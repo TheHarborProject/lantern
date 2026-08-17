@@ -3,6 +3,7 @@ import type { Severity } from "../schemas/rules.js";
 import type { GeneratedState } from "../state-planning/types.js";
 import type { AccessibilityComponent, CanonicalComponent } from "../types/component-scan.js";
 import type { EngineCapability, PlannedCheck } from "./types.js";
+import { computeCheckId } from "./compute-check-id.js";
 
 export interface RulePlanInput {
   readonly component: CanonicalComponent;
@@ -39,6 +40,7 @@ function planPerState(
   input: RulePlanInput,
 ): readonly PlannedCheck[] {
   return input.states.map((state) => ({
+    checkId: computeCheckId(input.component.id, state.id, ruleId),
     ruleId,
     severity: input.severity,
     componentId: input.component.id,

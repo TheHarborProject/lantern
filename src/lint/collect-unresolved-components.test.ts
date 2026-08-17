@@ -20,9 +20,15 @@ function unresolvedComponent(overrides: Partial<ComponentReport> = {}): Componen
 
 function report(standards: LintReport["standards"]): LintReport {
   return {
-    version: 2,
+    version: 3,
+    runId: "run-1",
+    startedAt: new Date(0).toISOString(),
+    finishedAt: new Date(0).toISOString(),
+    status: "completed",
     generatedAt: new Date(0).toISOString(),
     targeting: { mode: { kind: "incremental" }, rescanned: true },
+    engines: [],
+    config: { standards: ["wcag22-aa"], rules: {} },
     standards,
     summary: {
       componentsPass: 0,

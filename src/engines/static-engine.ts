@@ -31,23 +31,34 @@ export function createStaticEngine(): Engine {
 
       if (check.accessibility.accessibleNameSources.length === 0) {
         return Promise.resolve({
+          checkId: check.checkId,
+          componentId: check.componentId,
+          stateId: check.stateId,
           ruleId: check.ruleId,
           severity: check.severity,
           status: "fail",
           message: `"${check.component}" is focusable but exposes no prop capable of providing an accessible name (e.g. aria-label, aria-labelledby, label, alt, title, name, placeholder, or children).`,
           location,
           engine,
+          evidence: [{ kind: "observation", name: "accessibleNameSources", value: [] }],
+          durationMs: 0,
         });
       }
 
       return Promise.resolve({
+        checkId: check.checkId,
+        componentId: check.componentId,
+        stateId: check.stateId,
         ruleId: check.ruleId,
         severity: check.severity,
         status: "review",
         message: `"${check.component}" exposes an accessible-name-capable prop (${check.accessibility.accessibleNameSources.join(", ")}); static analysis cannot confirm one is actually supplied at runtime.`,
         location,
         engine,
+        outcomeReason: "inconclusive",
         reason: "Static evidence only proves the capability exists, not that a name is populated for any given usage — verify manually or enable rendered evaluation.",
+        evidence: [{ kind: "observation", name: "accessibleNameSources", value: check.accessibility.accessibleNameSources }],
+        durationMs: 0,
       });
     },
   };

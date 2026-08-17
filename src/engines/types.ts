@@ -17,6 +17,7 @@ export type EngineCapability = "static-evidence" | "rendered-dom";
  * executing them.
  */
 export interface PlannedCheck {
+  readonly checkId: string;
   readonly ruleId: string;
   readonly severity: Exclude<Severity, "off">;
   readonly componentId: string;
@@ -25,7 +26,7 @@ export interface PlannedCheck {
   readonly source: string;
   readonly requiredCapability: EngineCapability;
   /** Present whenever the check is scoped to one generated state. */
-  readonly stateId?: string | undefined;
+  readonly stateId: string;
   readonly stateProps?: Readonly<Record<string, unknown>> | undefined;
   /** Static/accessibility projection evidence already known for this component. */
   readonly accessibility: AccessibilityComponent;

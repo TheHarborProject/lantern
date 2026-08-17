@@ -20,12 +20,14 @@ function accessibility(overrides: Partial<AccessibilityComponent> = {}): Accessi
 
 function check(overrides: Partial<PlannedCheck> = {}): PlannedCheck {
   return {
+    checkId: "check-1",
     ruleId: "lantern/accessible-name",
     severity: "error",
     componentId: "Button.tsx#Button",
     component: "Button",
     source: "Button.tsx",
     requiredCapability: "static-evidence",
+    stateId: "state-1",
     accessibility: accessibility(),
     ...overrides,
   };
@@ -66,6 +68,8 @@ describe("createStaticEngine", () => {
     );
 
     expect(result.status).toBe("review");
+    expect(result.outcomeReason).toBe("inconclusive");
+    expect(result.evidence).toContainEqual({ kind: "observation", name: "accessibleNameSources", value: ["aria-label"] });
     expect(result.reason).toBeDefined();
   });
 });

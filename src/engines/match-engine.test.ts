@@ -19,12 +19,14 @@ function accessibility(): AccessibilityComponent {
 
 function check(overrides: Partial<PlannedCheck> = {}): PlannedCheck {
   return {
+    checkId: "check-1",
     ruleId: "lantern/accessible-name",
     severity: "error",
     componentId: "Button.tsx#Button",
     component: "Button",
     source: "Button.tsx",
     requiredCapability: "static-evidence",
+    stateId: "state-1",
     accessibility: accessibility(),
     ...overrides,
   };

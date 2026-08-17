@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { renderLintReport } from "./render-lint-report.js";
-import type { ComponentReport, LintReport, StateReport } from "./types.js";
+import type { CheckResult, ComponentReport, LintReport, StateReport } from "./types.js";
+
+function check(overrides: Partial<CheckResult> = {}): CheckResult {
+  return { checkId: "check-1", componentId: "Button.tsx#Button", stateId: "Button.tsx#Button#abc", ruleId: "lantern/accessible-name", severity: "error", status: "review", evidence: [], durationMs: 0, ...overrides };
+}
 
 function state(overrides: Partial<StateReport> = {}): StateReport {
   return {
+    componentId: "Button.tsx#Button",
     stateId: "Button.tsx#Button#abc",
     props: {},
     propProvenance: {},
@@ -31,10 +36,16 @@ function component(overrides: Partial<ComponentReport> = {}): ComponentReport {
 
 function report(overrides: Partial<LintReport> = {}): LintReport {
   return {
-    version: 2,
+    version: 3,
+    runId: "run-1",
+    startedAt: new Date(0).toISOString(),
+    finishedAt: new Date(0).toISOString(),
+    status: "completed",
     generatedAt: new Date(0).toISOString(),
     targeting: { mode: { kind: "incremental" }, rescanned: true, selection: { kind: "all" } },
     provider: { kind: "unavailable", reason: "no check provider configured" },
+    engines: [],
+    config: { standards: ["wcag22-aa"], rules: {} },
     diagnostics: [],
     standards: [{ standard: "wcag22-aa", components: [component()] }],
     summary: {
@@ -188,7 +199,7 @@ describe("renderLintReport", () => {
 
   it("keeps diagnostics visible", () => {
     const output = renderLintReport(report({
-      diagnostics: [{ source: "src/Foo.tsx", component: "Foo", message: "Component analysis is incomplete." }],
+      diagnostics: [{ code: "COMPONENT_ANALYSIS", severity: "warning", scope: "component", source: "src/Foo.tsx", component: "Foo", message: "Component analysis is incomplete." }],
     }), { verbose: false });
 
     expect(output).toContain("Review");
@@ -221,15 +232,15 @@ describe("renderLintReport", () => {
             states: [
               state({
                 checks: [
-                  { ruleId: "lantern/accessible-name", severity: "error", status: "fail", message: "no accessible name" },
-                  { ruleId: "lantern/keyboard-access", severity: "error", status: "pass", message: "received focus" },
+                  check({ ruleId: "lantern/accessible-name", status: "fail", message: "no accessible name" }),
+                  check({ checkId: "check-2", ruleId: "lantern/keyboard-access", status: "pass", message: "received focus" }),
                 ],
                 status: "fail",
               }),
               state({
                 checks: [
-                  { ruleId: "lantern/accessible-name", severity: "error", status: "fail", message: "no accessible name" },
-                  { ruleId: "lantern/keyboard-access", severity: "error", status: "pass", message: "received focus" },
+                  check({ ruleId: "lantern/accessible-name", status: "fail", message: "no accessible name" }),
+                  check({ checkId: "check-2", ruleId: "lantern/keyboard-access", status: "pass", message: "received focus" }),
                 ],
                 status: "fail",
               }),
@@ -252,13 +263,12 @@ describe("renderLintReport", () => {
             states: [
               state({
                 checks: [
-                  {
+                  check({
                     ruleId: "lantern/accessible-name",
-                    severity: "error",
                     status: "review",
                     message: "cannot confirm at runtime",
                     engine: { name: "lantern-static", version: "1.0.0" },
-                  },
+                  }),
                 ],
                 status: "review",
               }),

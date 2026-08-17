@@ -20,6 +20,7 @@ function accessibility(): AccessibilityComponent {
 
 function check(ruleId: string, stateId: string): PlannedCheck {
   return {
+    checkId: `${stateId}:${ruleId}`,
     ruleId,
     severity: "error",
     componentId: "Button.tsx#Button",
@@ -48,7 +49,7 @@ describe("executePlannedChecks", () => {
       supports: () => ({ kind: "supported" }),
       execute: (plannedCheck) => {
         order.push(plannedCheck.stateId ?? "");
-        const result: CheckResult = { ruleId: plannedCheck.ruleId, severity: plannedCheck.severity, status: "pass" };
+        const result: CheckResult = { checkId: plannedCheck.checkId, componentId: plannedCheck.componentId, stateId: plannedCheck.stateId, ruleId: plannedCheck.ruleId, severity: plannedCheck.severity, status: "pass", evidence: [], durationMs: 0 };
         return Promise.resolve(result);
       },
     };
