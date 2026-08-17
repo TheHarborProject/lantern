@@ -37,11 +37,38 @@ describe("lantern lint", () => {
 
     const output = log.mock.calls.map((call) => String(call[0])).join("\n");
     expect(output).toContain("Button");
-    expect(output).toContain("Provider   unavailable\n           no check provider configured");
+    // Both Lantern-owned engines are enabled by default (RFC-008), but no
+    // rule is configured (no `extends`/`rules` in this fixture), so nothing
+    // is actually evaluated — "available" must not be read as "covered".
+    expect(output).toContain("Provider   lantern-static@1.0.0, lantern-rendered-dom@1.0.0");
     expect(output).toContain("Standard   WCAG 2.2 AA");
     expect(output).toContain("Summary");
-    expect(output).not.toContain("no checks executed (no check provider configured)");
     expect(process.exitCode).toBe(0);
+  });
+
+  it("evaluates a genuine static check end-to-end and blocks on error severity", async () => {
+    writeFileSync(
+      join(root, "lantern.config.json"),
+      JSON.stringify({ project: {}, rules: { "lantern/accessible-name": "error" } }),
+    );
+    writeFileSync(
+      join(root, "Button.tsx"),
+      `
+        type ButtonProps = { disabled?: boolean };
+        export const Button = ({ disabled }: ButtonProps) => <button disabled={disabled} />;
+      `,
+    );
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const program = createProgram();
+    program.exitOverride();
+
+    await program.parseAsync(["lint", "--verbose"], { from: "user" });
+
+    const output = log.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(output).toContain("lantern/accessible-name");
+    expect(output).toContain("lantern-static@1.0.0");
+    expect(output).toContain("exposes no prop capable of providing an accessible name");
+    expect(process.exitCode).toBe(1);
   });
 
   it("exits 0 by default for an unresolved component", async () => {

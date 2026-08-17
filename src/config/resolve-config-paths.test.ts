@@ -22,7 +22,7 @@ describe("resolveConfigPaths", () => {
       "lantern/focus-visible": "warn",
       "lantern/keyboard-access": "error",
     });
-    expect(resolved.engines).toEqual({ static: true, axe: false, lighthouse: false });
+    expect(resolved.engines).toEqual({ static: true, rendered: true, axe: false, lighthouse: false });
   });
 
   it("stays compatible with existing isolation and auth configuration", () => {

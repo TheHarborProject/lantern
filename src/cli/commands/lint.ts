@@ -51,7 +51,7 @@ Examples:
       try {
         const mode = resolveTargetMode(options, targetPath);
         const config = loadConfig({ cwd: process.cwd(), explicitPath: globalOptions.config });
-        const report = buildLintReport({ config, mode, cwd: process.cwd() });
+        const report = await buildLintReport({ config, mode, cwd: process.cwd() });
 
         if (options.configure === true) {
           await runConfigure(config.configFilePath, report);

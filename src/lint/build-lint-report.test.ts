@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { Browser, Page } from "playwright";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { configSchema } from "../schemas/config.js";
 import { resolveConfigPaths } from "../config/resolve-config-paths.js";
 import type { ResolvedConfig } from "../types/config.js";
@@ -10,6 +11,35 @@ import { buildLintReport } from "./build-lint-report.js";
 function resolvedConfig(root: string, overrides: Record<string, unknown> = {}): ResolvedConfig {
   const raw = configSchema.parse({ project: { root: "." }, ...overrides });
   return resolveConfigPaths(raw, join(root, "lantern.config.json"));
+}
+
+interface FocusProbeResult {
+  readonly found: boolean;
+  readonly focused: boolean;
+}
+
+/**
+ * A fake isolation page reused across the rendered-engine tests below: each
+ * `runtime.render()` call issues three `page.evaluate` calls in order (inject
+ * props, check for a mount error, then the rendered engine's own focus
+ * probe) — mirrors the fake used in `component-runtime/runtime-session.test.ts`.
+ */
+function fakeRenderPage(probes: readonly FocusProbeResult[]): { readonly page: Page; readonly evaluate: ReturnType<typeof vi.fn> } {
+  const evaluate = vi.fn();
+  for (const probe of probes) {
+    evaluate
+      .mockImplementationOnce(() => Promise.resolve(undefined))
+      .mockImplementationOnce(() => Promise.resolve(null))
+      .mockImplementationOnce(() => Promise.resolve(probe));
+  }
+  const page = {
+    setContent: vi.fn(() => Promise.resolve(undefined)),
+    evaluate,
+    addScriptTag: vi.fn(() => Promise.resolve(null)),
+    waitForFunction: vi.fn(() => Promise.resolve(null)),
+    close: vi.fn(() => Promise.resolve(undefined)),
+  } as unknown as Page;
+  return { page, evaluate };
 }
 
 describe("buildLintReport", () => {
@@ -23,7 +53,7 @@ describe("buildLintReport", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("reports a ready component with review status and no fabricated checks", () => {
+  it("reports a ready component with review status and no fabricated checks", async () => {
     writeFileSync(
       join(root, "Button.tsx"),
       `
@@ -32,7 +62,7 @@ describe("buildLintReport", () => {
       `,
     );
 
-    const report = buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" } });
+    const report = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" } });
 
     expect(report.standards).toHaveLength(1);
     const button = report.standards[0]?.components[0];
@@ -46,7 +76,7 @@ describe("buildLintReport", () => {
     }
   });
 
-  it("reports an unresolved component as skipped with a truthful reason", () => {
+  it("reports an unresolved component as skipped with a truthful reason", async () => {
     writeFileSync(
       join(root, "Avatar.tsx"),
       `
@@ -55,7 +85,7 @@ describe("buildLintReport", () => {
       `,
     );
 
-    const report = buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" } });
+    const report = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" } });
 
     const avatar = report.standards[0]?.components[0];
     expect(avatar?.planStatus).toBe("unresolved");
@@ -65,7 +95,7 @@ describe("buildLintReport", () => {
     expect(avatar?.reason).toContain("user");
   });
 
-  it("reports an explicitly skipped component distinctly from unresolved", () => {
+  it("reports an explicitly skipped component distinctly from unresolved", async () => {
     writeFileSync(
       join(root, "Avatar.tsx"),
       `
@@ -74,7 +104,7 @@ describe("buildLintReport", () => {
       `,
     );
 
-    const report = buildLintReport({
+    const report = await buildLintReport({
       config: resolvedConfig(root, { components: { Avatar: { skip: true } } }),
       mode: { kind: "incremental" },
     });
@@ -85,7 +115,7 @@ describe("buildLintReport", () => {
     expect(avatar?.reason).toContain("Explicitly skipped");
   });
 
-  it("preserves truncation metadata from RFC-006 state planning", () => {
+  it("preserves truncation metadata from RFC-006 state planning", async () => {
     writeFileSync(
       join(root, "Button.tsx"),
       `
@@ -94,7 +124,7 @@ describe("buildLintReport", () => {
       `,
     );
 
-    const report = buildLintReport({
+    const report = await buildLintReport({
       config: resolvedConfig(root),
       mode: { kind: "incremental" },
       maxStates: 3,
@@ -106,10 +136,10 @@ describe("buildLintReport", () => {
     expect(button?.truncated).toBe(true);
   });
 
-  it("keeps multiple configured standards as separate report contexts", () => {
+  it("keeps multiple configured standards as separate report contexts", async () => {
     writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
 
-    const report = buildLintReport({
+    const report = await buildLintReport({
       config: resolvedConfig(root, { standards: ["wcag22-aa", "rgaa4.1"] }),
       mode: { kind: "incremental" },
     });
@@ -120,7 +150,7 @@ describe("buildLintReport", () => {
     expect(report.standards[0]).not.toBe(report.standards[1]);
   });
 
-  it("summarizes planning once across standards, never double-counting or favoring one standard", () => {
+  it("summarizes planning once across standards, never double-counting or favoring one standard", async () => {
     writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
     writeFileSync(
       join(root, "Avatar.tsx"),
@@ -130,7 +160,7 @@ describe("buildLintReport", () => {
       `,
     );
 
-    const report = buildLintReport({
+    const report = await buildLintReport({
       config: resolvedConfig(root, { standards: ["wcag22-aa", "rgaa4.1", "wcag21-aa"] }),
       mode: { kind: "incremental" },
     });
@@ -147,7 +177,7 @@ describe("buildLintReport", () => {
     expect(report.standards[1]?.components).toBe(report.standards[2]?.components);
   });
 
-  it("produces deterministic state ordering across repeated runs", () => {
+  it("produces deterministic state ordering across repeated runs", async () => {
     writeFileSync(
       join(root, "Button.tsx"),
       `
@@ -156,19 +186,177 @@ describe("buildLintReport", () => {
       `,
     );
 
-    const first = buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" } });
-    const second = buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" } });
+    const first = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" } });
+    const second = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" } });
 
     expect(first.standards[0]?.components[0]?.states.map((state) => state.stateId)).toEqual(
       second.standards[0]?.components[0]?.states.map((state) => state.stateId),
     );
   });
 
-  it("records the targeting mode and rescan flag", () => {
+  it("records the targeting mode and rescan flag", async () => {
     writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
 
-    const report = buildLintReport({ config: resolvedConfig(root), mode: { kind: "all" } });
+    const report = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "all" } });
 
     expect(report.targeting).toEqual({ mode: { kind: "all" }, rescanned: true, selection: { kind: "all" } });
+  });
+
+  it("reports no engines available, distinctly, when none are enabled", async () => {
+    writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
+
+    const report = await buildLintReport({
+      config: resolvedConfig(root, { engines: { static: false, rendered: false } }),
+      mode: { kind: "incremental" },
+    });
+
+    expect(report.provider).toEqual({ kind: "unavailable", reason: "no engines are enabled in configuration" });
+  });
+
+  it("reports enabled engines truthfully without claiming full rule coverage", async () => {
+    writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
+
+    const report = await buildLintReport({ config: resolvedConfig(root), mode: { kind: "incremental" } });
+
+    expect(report.provider).toEqual({ kind: "available", provider: "lantern-static@1.0.0, lantern-rendered-dom@1.0.0" });
+  });
+
+  it("evaluates a genuine static check end-to-end from existing scan/projection evidence", async () => {
+    writeFileSync(
+      join(root, "Button.tsx"),
+      `
+        type ButtonProps = { disabled?: boolean };
+        export const Button = ({ disabled }: ButtonProps) => <button disabled={disabled} />;
+      `,
+    );
+
+    const report = await buildLintReport({
+      config: resolvedConfig(root, { rules: { "lantern/accessible-name": "error" } }),
+      mode: { kind: "incremental" },
+    });
+
+    const button = report.standards[0]?.components[0];
+    expect(button?.status).toBe("fail");
+    for (const state of button?.states ?? []) {
+      expect(state.checks).toEqual([
+        expect.objectContaining({
+          ruleId: "lantern/accessible-name",
+          status: "fail",
+          severity: "error",
+          engine: { name: "lantern-static", version: "1.0.0" },
+        }),
+      ]);
+    }
+  });
+
+  it("treats a configured rule with no supporting engine as review, never a silent pass", async () => {
+    writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
+
+    const report = await buildLintReport({
+      config: resolvedConfig(root, { rules: { "lantern/color-contrast": "warn" } }),
+      mode: { kind: "incremental" },
+    });
+
+    const button = report.standards[0]?.components[0];
+    const check = button?.states[0]?.checks[0];
+    expect(check?.status).toBe("review");
+    expect(check?.reason).toBeDefined();
+    expect(button?.status).toBe("review");
+  });
+
+  it("executes a genuine rendered check through the reused session runtime across multiple states", async () => {
+    writeFileSync(
+      join(root, "Button.tsx"),
+      `
+        type ButtonProps = { disabled?: boolean };
+        export const Button = ({ disabled }: ButtonProps) => <button disabled={disabled} />;
+      `,
+    );
+    const { page, evaluate } = fakeRenderPage([
+      { found: true, focused: true },
+      { found: true, focused: false },
+    ]);
+    const newPage = vi.fn(() => Promise.resolve(page));
+    const browser = { newPage, close: vi.fn(() => Promise.resolve(undefined)) } as unknown as Browser;
+    const launch = vi.fn(() => Promise.resolve(browser));
+    const bundle = vi.fn(() => Promise.resolve("/* bundled */"));
+
+    const report = await buildLintReport({
+      config: resolvedConfig(root, { rules: { "lantern/keyboard-access": "error" } }),
+      mode: { kind: "incremental" },
+      bundle,
+      launch,
+    });
+
+    const button = report.standards[0]?.components[0];
+    expect(button?.states).toHaveLength(2);
+    expect(button?.states.map((state) => state.checks[0]?.status)).toEqual(["pass", "pass"]);
+    expect(button?.states.map((state) => state.checks[0]?.engine)).toEqual([
+      { name: "lantern-rendered-dom", version: "1.0.0" },
+      { name: "lantern-rendered-dom", version: "1.0.0" },
+    ]);
+    expect(button?.status).toBe("pass");
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(bundle).toHaveBeenCalledTimes(1);
+    expect(newPage).toHaveBeenCalledTimes(2);
+    expect(evaluate).toHaveBeenCalledTimes(6);
+  });
+
+  it("detects a genuine keyboard-access defect instead of fabricating a pass", async () => {
+    writeFileSync(
+      join(root, "Button.tsx"),
+      `
+        type ButtonProps = { disabled?: boolean };
+        export const Button = ({ disabled }: ButtonProps) => <button disabled={disabled} />;
+      `,
+    );
+    const { page } = fakeRenderPage([
+      { found: true, focused: true },
+      // Bug: the disabled state still receives keyboard focus.
+      { found: true, focused: true },
+    ]);
+    const newPage = vi.fn(() => Promise.resolve(page));
+    const browser = { newPage, close: vi.fn(() => Promise.resolve(undefined)) } as unknown as Browser;
+    const launch = vi.fn(() => Promise.resolve(browser));
+    const bundle = vi.fn(() => Promise.resolve("/* bundled */"));
+
+    const report = await buildLintReport({
+      config: resolvedConfig(root, { rules: { "lantern/keyboard-access": "error" } }),
+      mode: { kind: "incremental" },
+      bundle,
+      launch,
+    });
+
+    const button = report.standards[0]?.components[0];
+    expect(button?.status).toBe("fail");
+    expect(button?.states.map((state) => state.checks[0]?.status)).toEqual(["pass", "fail"]);
+    expect(button?.states[1]?.checks[0]?.message).toContain("still received keyboard focus");
+  });
+
+  it("does not launch a runtime for a rendered-dom rule no engine actually supports", async () => {
+    writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
+    const launch = vi.fn(() => Promise.reject(new Error("must not launch")));
+
+    const report = await buildLintReport({
+      config: resolvedConfig(root, { rules: { "lantern/color-contrast": "warn" } }),
+      mode: { kind: "incremental" },
+      launch,
+    });
+
+    expect(launch).not.toHaveBeenCalled();
+    expect(report.standards[0]?.components[0]?.states[0]?.checks[0]?.status).toBe("review");
+  });
+
+  it("propagates a genuine engine/runtime failure instead of fabricating a check outcome", async () => {
+    writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
+    const launch = vi.fn(() => Promise.reject(new Error("no browser binary available")));
+
+    await expect(
+      buildLintReport({
+        config: resolvedConfig(root, { rules: { "lantern/keyboard-access": "error" } }),
+        mode: { kind: "incremental" },
+        launch,
+      }),
+    ).rejects.toThrow("no browser binary available");
   });
 });
