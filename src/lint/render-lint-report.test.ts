@@ -47,7 +47,7 @@ describe("renderLintReport", () => {
   it("aggregates repeated non-actionable states while retaining planning context", () => {
     const fixture = report();
     const ordinary = Array.from({ length: 50 }, (_, index): StateReport => ({
-      componentId: "src/Button.tsx#Button", stateId: `ordinary-${index}`, props: { size: index }, propProvenance: { size: "inferred" }, checks: [], status: "review", outcomeReason: "not-applicable",
+      componentId: "src/Button.tsx#Button", stateId: `ordinary-${index}`, props: { size: index }, propProvenance: { size: "inferred" }, checks: [], status: "review", outcomeReason: "not-applicable", reason: "No enabled accessibility check applies to this component's analyzed structure.",
     }));
     const component = fixture.standards[0]!.components[0]!;
     const output = renderLintReport({ ...fixture, standards: [{ ...fixture.standards[0]!, components: [{ ...component, status: "review", states: ordinary, totalPossibleStates: 96, truncated: true }] }] }, { mode: "verbose" });
@@ -56,9 +56,27 @@ describe("renderLintReport", () => {
     expect(output).not.toContain("States:");
     expect(output).toContain("Dimensions");
     expect(output).toContain("Review\n     50 states not applicable");
+    expect(output).toContain("Reason\n     No enabled accessibility check applies to this component's analyzed structure.");
     expect(output).not.toContain("ordinary-0");
     expect(output).not.toContain("ordinary-49");
     expect(output).not.toContain("State\n");
+  });
+
+  it("aggregates equivalent explanations separately and keeps operational unavailability distinct", () => {
+    const fixture = report();
+    const component = fixture.standards[0]!.components[0]!;
+    const states: StateReport[] = [
+      { componentId: component.componentId, stateId: "none-enabled", props: {}, propProvenance: {}, checks: [], status: "review", outcomeReason: "not-applicable", reason: "No accessibility rule is enabled for this component." },
+      { componentId: component.componentId, stateId: "none-applies", props: {}, propProvenance: {}, checks: [], status: "review", outcomeReason: "not-applicable", reason: "No enabled accessibility check applies to this component's analyzed structure." },
+      { componentId: component.componentId, stateId: "engine-unavailable", props: {}, propProvenance: {}, checks: [], status: "review", outcomeReason: "unavailable", reason: "No accessibility engine is enabled, so these states could not be evaluated." },
+    ];
+    const output = renderLintReport({ ...fixture, standards: [{ ...fixture.standards[0]!, components: [{ ...component, status: "review", states, truncated: false, totalPossibleStates: 3 }] }] }, { mode: "verbose" });
+
+    expect(output.match(/1 state not applicable/g)).toHaveLength(2);
+    expect(output).toContain("1 state could not be evaluated");
+    expect(output).toContain("No accessibility rule is enabled for this component.");
+    expect(output).toContain("No enabled accessibility check applies to this component's analyzed structure.");
+    expect(output).toContain("No accessibility engine is enabled, so these states could not be evaluated.");
   });
 
   it("expands an actionable review state alongside aggregated ordinary states", () => {

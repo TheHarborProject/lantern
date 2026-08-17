@@ -67,6 +67,7 @@ function renderComponent(component: ComponentReport, mode: "compact" | "verbose"
     const { actionable, aggregated } = partitionStates(component.states);
     for (const group of aggregated) {
       lines.push(`   ${style.strong(group.heading)}`, `     ${style.review(`${group.count} ${plural(group.count, "state", "states")} ${group.description}`)}`);
+      if (group.reason !== undefined) lines.push("", `   ${style.strong("Reason")}`, `     ${group.reason}`);
     }
     for (const state of actionable) lines.push(...renderState(state, style));
   }
@@ -76,6 +77,7 @@ function renderComponent(component: ComponentReport, mode: "compact" | "verbose"
 interface AggregatedStates {
   readonly heading: string;
   readonly description: string;
+  readonly reason?: string | undefined;
   readonly count: number;
 }
 
@@ -88,7 +90,7 @@ function partitionStates(states: readonly StateReport[]): { actionable: StateRep
       continue;
     }
     const aggregate = describeAggregate(state);
-    const key = `${aggregate.heading}:${aggregate.description}`;
+    const key = `${state.outcomeReason ?? ""}:${aggregate.heading}:${aggregate.description}:${aggregate.reason ?? ""}`;
     const existing = groups.get(key);
     groups.set(key, { ...aggregate, count: (existing?.count ?? 0) + 1 });
   }
@@ -96,6 +98,7 @@ function partitionStates(states: readonly StateReport[]): { actionable: StateRep
 }
 
 function isActionableState(state: StateReport): boolean {
+  if (state.checks.length === 0 && state.status === "review") return false;
   if (state.status === "fail" || state.status === "skipped") return true;
   if (state.checks.some(isActionableCheck)) return true;
   return state.status === "review" && state.outcomeReason !== "not-applicable";
@@ -108,7 +111,8 @@ function isActionableCheck(check: CheckResult): boolean {
 }
 
 function describeAggregate(state: StateReport): Omit<AggregatedStates, "count"> {
-  if (state.outcomeReason === "not-applicable") return { heading: "Review", description: "not applicable" };
+  if (state.outcomeReason === "not-applicable") return { heading: "Review", description: "not applicable", reason: state.reason };
+  if (state.outcomeReason === "unavailable") return { heading: "Review", description: "could not be evaluated", reason: state.reason };
   if (state.status === "pass") return { heading: "Passed", description: "passed" };
   return { heading: "Review", description: state.outcomeReason?.replaceAll("-", " ") ?? "without individual diagnostics" };
 }
@@ -117,6 +121,7 @@ function renderState(state: StateReport, style: TerminalStyle): string[] {
   const props = Object.entries(state.props).map(([key, value]) => `${key}=${formatValue(value)}`).join("  ") || "default";
   const lines = [`   ${style.strong("State")}`, `     ${props}`];
   if (state.outcomeReason !== undefined) lines.push(`     ${style.strong("Reason:")} ${styleStatus(style, state.status, state.outcomeReason.replaceAll("-", " "))}`);
+  if (state.reason !== undefined) lines.push(`     ${state.reason}`);
   for (const check of state.checks.filter(isActionableCheck)) lines.push(...renderCheck(check, style));
   return lines;
 }

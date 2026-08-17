@@ -83,7 +83,25 @@ describe("buildLintReport", () => {
     for (const state of button?.states ?? []) {
       expect(state.checks).toEqual([]);
       expect(state.status).toBe("review");
+      expect(state.outcomeReason).toBe("not-applicable");
+      expect(state.reason).toBe("No accessibility rule is enabled for this component.");
     }
+  });
+
+  it("distinguishes enabled rules that do not apply to the analyzed structure", async () => {
+    writeFileSync(join(root, "Panel.tsx"), "export const Panel = () => <section />;");
+
+    const report = await buildLintReport({
+      config: resolvedConfig(root, { rules: { "lantern/accessible-name": "error" } }),
+      mode: { kind: "incremental" },
+    });
+
+    expect(report.standards[0]?.components[0]?.states[0]).toMatchObject({
+      status: "review",
+      outcomeReason: "not-applicable",
+      reason: "No enabled accessibility check applies to this component's analyzed structure.",
+      checks: [],
+    });
   });
 
   it("reports an unresolved component as skipped with a truthful reason", async () => {
@@ -221,6 +239,11 @@ describe("buildLintReport", () => {
     });
 
     expect(report.provider).toEqual({ kind: "unavailable", reason: "no engines are enabled in configuration" });
+    expect(report.standards[0]?.components[0]?.states[0]).toMatchObject({
+      status: "review",
+      outcomeReason: "unavailable",
+      reason: "No accessibility engine is enabled, so these states could not be evaluated.",
+    });
   });
 
   it("reports enabled engines truthfully without claiming full rule coverage", async () => {

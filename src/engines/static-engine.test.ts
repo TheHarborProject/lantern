@@ -68,7 +68,7 @@ describe("createStaticEngine", () => {
     );
 
     expect(result.status).toBe("review");
-    expect(result.outcomeReason).toBe("inconclusive");
+    expect(result.outcomeReason).toBe("manual-review");
     expect(result.evidence).toContainEqual({ kind: "observation", name: "accessibleNameSources", value: ["aria-label"] });
     expect(result.reason).toBeDefined();
   });

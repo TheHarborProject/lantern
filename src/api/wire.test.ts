@@ -63,6 +63,7 @@ const fullReport: LintReport = {
               props: { label: "Save", onClick: null },
               propProvenance: { label: "explicit", onClick: "fixture", variant: "inferred" },
               status: "review",
+              reason: "State-level explanation survives serialization.",
               checks: [
                 {
                   checkId: "check-1",
@@ -154,6 +155,7 @@ describe("audit wire DTO", () => {
       "observation", "expectation", "element", "attribute", "source", "capability",
     ]);
     expect(state?.checks[1]).toMatchObject({ outcomeReason: "operational-error", reason: "render probe crashed" });
+    expect(state?.reason).toBe("State-level explanation survives serialization.");
     expect(wire.standards[0]?.components[0]?.dimensions).toEqual([{ name: "variant", values: ["a", "b"], source: "inferred" }]);
 
     expect(JSON.parse(JSON.stringify(wire))).toEqual(wire);
