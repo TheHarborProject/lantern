@@ -1,291 +1,122 @@
 import { describe, expect, it } from "vitest";
-import { renderLintReport } from "./render-lint-report.js";
-import type { CheckResult, ComponentReport, LintReport, StateReport } from "./types.js";
+import { formatDuration, renderLintReport, STATUS_ICON } from "./render-lint-report.js";
+import type { LintReport, StateReport } from "./types.js";
+import { createTerminalStyle } from "../cli/terminal-style.js";
 
-function check(overrides: Partial<CheckResult> = {}): CheckResult {
-  return { checkId: "check-1", componentId: "Button.tsx#Button", stateId: "Button.tsx#Button#abc", ruleId: "lantern/accessible-name", severity: "error", status: "review", evidence: [], durationMs: 0, ...overrides };
-}
-
-function state(overrides: Partial<StateReport> = {}): StateReport {
+function report(): LintReport {
   return {
-    componentId: "Button.tsx#Button",
-    stateId: "Button.tsx#Button#abc",
-    props: {},
-    propProvenance: {},
-    checks: [],
-    status: "review",
-    ...overrides,
-  };
-}
-
-function component(overrides: Partial<ComponentReport> = {}): ComponentReport {
-  return {
-    componentId: "Button.tsx#Button",
-    component: "Button",
-    source: "Button.tsx",
-    planStatus: "ready",
-    status: "review",
-    states: [state()],
-    dimensions: [],
-    truncated: false,
-    totalPossibleStates: 1,
-    maxStates: 50,
-    ...overrides,
-  };
-}
-
-function report(overrides: Partial<LintReport> = {}): LintReport {
-  return {
-    version: 3,
-    runId: "run-1",
-    startedAt: new Date(0).toISOString(),
-    finishedAt: new Date(0).toISOString(),
-    status: "completed",
-    generatedAt: new Date(0).toISOString(),
+    version: 3, runId: "run-1", startedAt: new Date(0).toISOString(), finishedAt: new Date(0).toISOString(), status: "completed", generatedAt: new Date(0).toISOString(),
     targeting: { mode: { kind: "incremental" }, rescanned: true, selection: { kind: "all" } },
-    provider: { kind: "unavailable", reason: "no check provider configured" },
-    engines: [],
-    config: { standards: ["wcag22-aa"], rules: {} },
-    diagnostics: [],
-    standards: [{ standard: "wcag22-aa", components: [component()] }],
-    summary: {
-      componentsPass: 0,
-      componentsFail: 0,
-      componentsReview: 1,
-      componentsSkipped: 0,
-      checksPass: 0,
-      checksFail: 0,
-      checksReview: 0,
-      durationMs: 1420,
-    },
-    ...overrides,
+    provider: { kind: "available", provider: "lantern-static@1.0.0" }, engines: [],
+    config: { standards: ["wcag22-aa"], rules: {} }, diagnostics: [],
+    standards: [{ standard: "wcag22-aa", components: [{
+      componentId: "src/Button.tsx#Button", component: "Button", source: "src/Button.tsx", planStatus: "ready", status: "fail",
+      states: [{ componentId: "src/Button.tsx#Button", stateId: "state-1", props: { disabled: true }, propProvenance: { disabled: "inferred" }, status: "fail", checks: [{ checkId: "check-1", componentId: "src/Button.tsx#Button", stateId: "state-1", ruleId: "lantern/accessible-name", severity: "error", status: "fail", message: "Missing name", engine: { name: "lantern-static", version: "1.0.0" }, evidence: [{ kind: "expectation", expected: "a name", observed: "none" }], durationMs: 3 }] }],
+      dimensions: [{ name: "disabled", values: [false, true], source: "inferred" }], truncated: true, totalPossibleStates: 2, maxStates: 1,
+    }] }],
+    summary: { componentsPass: 0, componentsFail: 1, componentsReview: 0, componentsSkipped: 0, checksPass: 0, checksFail: 1, checksReview: 0, durationMs: 810 },
   };
 }
 
 describe("renderLintReport", () => {
-  it("renders concise default output without individual states", () => {
-    const output = renderLintReport(report({
-      standards: [{
-        standard: "wcag22-aa",
-        components: [
-          component({
-            states: [
-              state({ props: { disabled: false, variant: "default" } }),
-              state({ props: { disabled: true, variant: "outline" } }),
-            ],
-            dimensions: [{ name: "variant", values: ["default", "outline"], source: "inferred" }],
-            totalPossibleStates: 2,
-          }),
-        ],
-      }],
-    }), { verbose: false });
-
-    expect(output).toContain("Lantern lint");
-    expect(output).toContain("Standard   WCAG 2.2 AA");
-    expect(output).toContain("Provider   unavailable\n           no check provider configured");
-    expect(output).toContain("◌ Button");
-    expect(output).toContain("2 states · exhaustive");
-    expect(output).not.toContain("disabled=false");
-    expect(output).not.toContain("false /");
+  it("renders only shared report counts in minimal mode", () => {
+    const output = renderLintReport(report(), { mode: "minimal" });
+    expect(output).toBe(" Components  1\n      Passed  0\n      Failed  1\n      Review  0\n     Skipped  0\n    Duration  810ms\n");
+    expect(output).not.toContain("Lantern lint");
   });
 
-  it("renders singular, exhaustive, and coverage-bounded planning text", () => {
-    const output = renderLintReport(report({
-      standards: [{
-        standard: "wcag22-aa",
-        components: [
-          component({ component: "App", states: [state()], totalPossibleStates: 1 }),
-          component({ states: [state(), state()], totalPossibleStates: 12 }),
-          component({ component: "BigButton", states: [state(), state()], totalPossibleStates: 96, truncated: true }),
-        ],
-      }],
-      summary: { ...report().summary, componentsReview: 3 },
-    }), { verbose: false });
-
-    expect(output).toContain("◌ App\n  1 state");
-    expect(output).toContain("◌ Button\n  2 states · exhaustive");
-    expect(output).toContain("◌ BigButton\n  96 states planned\n  2 selected · coverage-bounded");
+  it("renders compact component identity, bounded coverage, and summary without diagnostics", () => {
+    const output = renderLintReport(report(), { mode: "compact" });
+    expect(output).toContain(" RUN  WCAG 2.2 AA");
+    expect(output).toContain("✗ src/Button.tsx#Button");
+    expect(output).toContain("1/2 states · coverage-bounded");
+    expect(output).not.toContain("lantern/accessible-name");
+    expect(output).toContain(" Components  1");
   });
 
-  it("shows dimensions and named selected states in verbose output", () => {
-    const output = renderLintReport(report({
-      standards: [{
-        standard: "wcag22-aa",
-        components: [
-          component({
-            states: [
-              state({ props: { disabled: false, size: "default", variant: "outline" } }),
-              state({ props: { disabled: true, size: "sm", variant: "default" } }),
-            ],
-            dimensions: [
-              { name: "disabled", values: [false, true], source: "inferred" },
-              { name: "size", values: ["default", "sm"], source: "inferred" },
-              { name: "variant", values: ["default", "outline"], source: "inferred" },
-            ],
-            totalPossibleStates: 96,
-            truncated: true,
-          }),
-        ],
-      }],
-    }), { verbose: true });
+  it("renders actionable state, check, engine, timing, and evidence detail in verbose mode", () => {
+    const output = renderLintReport(report(), { mode: "verbose" });
+    expect(output).toContain("Provider   lantern-static@1.0.0");
+    expect(output).toContain("disabled: false | true (inferred)");
+    expect(output).toContain("State\n     disabled=true");
+    expect(output).not.toContain("state: state-1");
+    expect(output).toContain("lantern/accessible-name · lantern-static@1.0.0 · 3ms");
+    expect(output).toContain("Expected: a name · Observed: none");
+  });
 
-    expect(output).toContain("Standard   WCAG 2.2 AA (wcag22-aa)");
+  it("aggregates repeated non-actionable states while retaining planning context", () => {
+    const fixture = report();
+    const ordinary = Array.from({ length: 50 }, (_, index): StateReport => ({
+      componentId: "src/Button.tsx#Button", stateId: `ordinary-${index}`, props: { size: index }, propProvenance: { size: "inferred" }, checks: [], status: "review", outcomeReason: "not-applicable",
+    }));
+    const component = fixture.standards[0]!.components[0]!;
+    const output = renderLintReport({ ...fixture, standards: [{ ...fixture.standards[0]!, components: [{ ...component, status: "review", states: ordinary, totalPossibleStates: 96, truncated: true }] }] }, { mode: "verbose" });
+
+    expect(output).toContain("50/96 states · coverage-bounded");
+    expect(output).not.toContain("States:");
     expect(output).toContain("Dimensions");
-    expect(output).toContain("disabled   false | true");
-    expect(output).toContain("variant    default | outline");
-    expect(output).toContain("Showing 2 selected states from 96 theoretical states");
-    expect(output).toContain("Selection: coverage-bounded");
-    expect(output).toContain("#1  disabled=false  size=default  variant=outline");
+    expect(output).toContain("Review\n     50 states not applicable");
+    expect(output).not.toContain("ordinary-0");
+    expect(output).not.toContain("ordinary-49");
+    expect(output).not.toContain("State\n");
   });
 
-  it("renders since targeting context from structured selection metadata", () => {
-    const output = renderLintReport(report({
-      targeting: {
-        mode: { kind: "since", ref: "HEAD~1" },
-        rescanned: true,
-        selection: { kind: "fallback", reason: "shared source changed: src/lib/utils.ts" },
-      },
-    }), { verbose: false });
+  it("expands an actionable review state alongside aggregated ordinary states", () => {
+    const fixture = report();
+    const component = fixture.standards[0]!.components[0]!;
+    const review: StateReport = {
+      componentId: component.componentId, stateId: "review-id", props: { disabled: false }, propProvenance: { disabled: "inferred" }, status: "review", outcomeReason: "manual-review",
+      checks: [{ checkId: "review-check", componentId: component.componentId, stateId: "review-id", ruleId: "lantern/focus-visible", severity: "warn", status: "review", outcomeReason: "manual-review", reason: "Inspect the focus indicator", evidence: [], durationMs: 2 }],
+    };
+    const ordinary: StateReport = { ...review, stateId: "ordinary-id", props: { disabled: true }, checks: [], outcomeReason: "not-applicable" };
+    const output = renderLintReport({ ...fixture, standards: [{ ...fixture.standards[0]!, components: [{ ...component, status: "review", states: [ordinary, review], totalPossibleStates: 2, truncated: false }] }] }, { mode: "verbose" });
 
-    expect(output).toContain("Target     changes since HEAD~1");
-    expect(output).toContain("Selection  full component set");
-    expect(output).toContain("Reason     shared source changed: src/lib/utils.ts");
+    expect(output).toContain("1 state not applicable");
+    expect(output).toContain("State\n     disabled=false");
+    expect(output).toContain("lantern/focus-visible");
+    expect(output).toContain("Inspect the focus indicator");
+    expect(output).not.toContain("review-id");
   });
 
-  it("renders explicit path target context", () => {
-    const output = renderLintReport(report({
-      targeting: {
-        mode: { kind: "path", path: "src/components/ui" },
-        rescanned: true,
-        selection: { kind: "path", path: "src/components/ui", pathKind: "directory", componentCount: 2 },
-      },
-      summary: { ...report().summary, componentsReview: 2 },
-    }), { verbose: false });
-
-    expect(output).toContain("Target     src/components/ui");
-    expect(output).toContain("Selection  2 components");
-    expect(output).not.toContain("Type       directory");
+  it("uses one human duration formatter and identical summary counts in every mode", () => {
+    expect(formatDuration(640)).toBe("640ms");
+    expect(formatDuration(1240)).toBe("1.24s");
+    const summaries = (["minimal", "compact", "verbose"] as const).map((mode) => renderLintReport(report(), { mode }).slice(renderLintReport(report(), { mode }).indexOf(" Components")));
+    expect(new Set(summaries).size).toBe(1);
   });
 
-  it("renders explicit path target type in verbose mode and zero selection", () => {
-    const output = renderLintReport(report({
-      targeting: {
-        mode: { kind: "path", path: "src/lib" },
-        rescanned: true,
-        selection: { kind: "path", path: "src/lib", pathKind: "directory", componentCount: 0 },
-      },
-      standards: [{ standard: "wcag22-aa", components: [] }],
-      summary: { ...report().summary, componentsReview: 0 },
-    }), { verbose: true });
-
-    expect(output).toContain("Target     src/lib");
-    expect(output).toContain("Type       directory");
-    expect(output).toContain("Selection  no components");
+  it("uses stable status icons and can disable ANSI output", () => {
+    expect(STATUS_ICON).toEqual({ pass: "✓", fail: "✗", review: "◌", skipped: "↷" });
+    expect(renderLintReport(report(), { mode: "compact", color: false })).not.toContain("\u001b[");
+    expect(renderLintReport(report(), { mode: "compact", color: true })).toContain("\u001b[");
   });
 
-  it("renders no affected components for since no-op selection", () => {
-    const output = renderLintReport(report({
-      targeting: {
-        mode: { kind: "since", ref: "HEAD~1" },
-        rescanned: true,
-        selection: { kind: "none" },
-      },
-      standards: [{ standard: "wcag22-aa", components: [] }],
-      summary: { ...report().summary, componentsReview: 0 },
-    }), { verbose: false });
-
-    expect(output).toContain("Selection  no affected components");
+  it("applies compact hierarchy through semantic styles", () => {
+    const style = createTerminalStyle(true);
+    const output = renderLintReport(report(), { mode: "compact", color: true });
+    expect(output).toContain(style.accent(style.strong(" RUN ")));
+    expect(output).toContain(style.failure("✗"));
+    expect(output).toContain(style.review("coverage-bounded"));
+    expect(output).toContain(style.muted("src/Button.tsx"));
   });
 
-  it("keeps diagnostics visible", () => {
-    const output = renderLintReport(report({
-      diagnostics: [{ code: "COMPONENT_ANALYSIS", severity: "warning", scope: "component", source: "src/Foo.tsx", component: "Foo", message: "Component analysis is incomplete." }],
-    }), { verbose: false });
-
-    expect(output).toContain("Review");
-    expect(output).toContain("! src/Foo.tsx#Foo");
-    expect(output).toContain("Component analysis is incomplete.");
+  it("styles the shared minimal summary by semantic status", () => {
+    const style = createTerminalStyle(true);
+    const output = renderLintReport(report(), { mode: "minimal", color: true });
+    expect(output).toContain(style.strong(" Components  1"));
+    expect(output).toContain(style.success("      Passed  0"));
+    expect(output).toContain(style.failure("      Failed  1"));
+    expect(output).toContain(style.review("      Review  0"));
+    expect(output).toContain(style.skipped("     Skipped  0"));
   });
 
-  it("renders compact deterministic summary", () => {
-    const output = renderLintReport(report(), { verbose: false });
-
-    expect(output).toContain("Summary\n1 component · 0 passed · 0 failed · 1 review · 0 skipped\n1.42s");
-  });
-
-  it("renders available engine provenance in the provider line", () => {
-    const output = renderLintReport(
-      report({ provider: { kind: "available", provider: "lantern-static@1.0.0, lantern-rendered-dom@1.0.0" } }),
-      { verbose: false },
-    );
-
-    expect(output).toContain("Provider   lantern-static@1.0.0, lantern-rendered-dom@1.0.0");
-  });
-
-  it("summarizes non-passing checks compactly by default, grouped by rule and status", () => {
-    const output = renderLintReport(report({
-      standards: [{
-        standard: "wcag22-aa",
-        components: [
-          component({
-            status: "fail",
-            states: [
-              state({
-                checks: [
-                  check({ ruleId: "lantern/accessible-name", status: "fail", message: "no accessible name" }),
-                  check({ checkId: "check-2", ruleId: "lantern/keyboard-access", status: "pass", message: "received focus" }),
-                ],
-                status: "fail",
-              }),
-              state({
-                checks: [
-                  check({ ruleId: "lantern/accessible-name", status: "fail", message: "no accessible name" }),
-                  check({ checkId: "check-2", ruleId: "lantern/keyboard-access", status: "pass", message: "received focus" }),
-                ],
-                status: "fail",
-              }),
-            ],
-          }),
-        ],
-      }],
-    }), { verbose: false });
-
-    expect(output).toContain("✗ lantern/accessible-name  2 states · no accessible name");
-    expect(output).not.toContain("lantern/keyboard-access");
-  });
-
-  it("shows per-state check provenance in verbose output", () => {
-    const output = renderLintReport(report({
-      standards: [{
-        standard: "wcag22-aa",
-        components: [
-          component({
-            states: [
-              state({
-                checks: [
-                  check({
-                    ruleId: "lantern/accessible-name",
-                    status: "review",
-                    message: "cannot confirm at runtime",
-                    engine: { name: "lantern-static", version: "1.0.0" },
-                  }),
-                ],
-                status: "review",
-              }),
-            ],
-          }),
-        ],
-      }],
-    }), { verbose: true });
-
-    expect(output).toContain("◌ lantern/accessible-name  lantern-static@1.0.0  cannot confirm at runtime");
-  });
-
-  it("falls back to unknown standard identifiers", () => {
-    const output = renderLintReport(report({ standards: [{ standard: "future-standard", components: [component()] }] }), {
-      verbose: false,
-    });
-
-    expect(output).toContain("Standard   future-standard");
+  it("styles verbose section labels and secondary provider metadata", () => {
+    const style = createTerminalStyle(true);
+    const output = renderLintReport(report(), { mode: "verbose", color: true });
+    expect(output).toContain(style.strong("Provider"));
+    expect(output).toContain(style.strong("Standard"));
+    expect(output).toContain(style.strong("Dimensions"));
+    expect(output).toContain(style.strong("State"));
+    expect(output).toContain(style.muted("lantern-static@1.0.0"));
   });
 });

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProgram } from "../program.js";
+import { resolveOutputMode } from "./lint.js";
 
 describe("lantern lint", () => {
   let root: string;
@@ -19,6 +20,13 @@ describe("lantern lint", () => {
     rmSync(root, { recursive: true, force: true });
     vi.restoreAllMocks();
     process.exitCode = undefined;
+  });
+
+  it("resolves output modes with CLI flags overriding config and compact as the default", () => {
+    expect(resolveOutputMode({})).toBe("compact");
+    expect(resolveOutputMode({}, "minimal")).toBe("minimal");
+    expect(resolveOutputMode({ verbose: true }, "minimal")).toBe("verbose");
+    expect(() => resolveOutputMode({ minimal: true, compact: true })).toThrow(/mutually exclusive/);
   });
 
   it("renders a ready component truthfully, with exit code 0", async () => {
@@ -40,9 +48,9 @@ describe("lantern lint", () => {
     // Both Lantern-owned engines are enabled by default (RFC-008), but no
     // rule is configured (no `extends`/`rules` in this fixture), so nothing
     // is actually evaluated — "available" must not be read as "covered".
-    expect(output).toContain("Provider   lantern-static@1.0.0, lantern-rendered-dom@1.0.0");
-    expect(output).toContain("Standard   WCAG 2.2 AA");
-    expect(output).toContain("Summary");
+    expect(output).toContain("RUN  WCAG 2.2 AA");
+    expect(output).toContain("Button.tsx#Button");
+    expect(output).toContain("Components");
     expect(process.exitCode).toBe(0);
   });
 
@@ -249,9 +257,9 @@ describe("lantern lint", () => {
     await program.parseAsync(["lint", "--verbose"], { from: "user" });
 
     const output = log.mock.calls.map((call) => String(call[0])).join("\n");
-    expect(output).toMatch(/Button\.tsx#Button#[0-9a-f]{10}/);
     expect(output).toContain("(inferred)");
-    expect(output).toContain("#1  size=sm");
+    expect(output).toContain("2 states not applicable");
+    expect(output).not.toMatch(/Button\.tsx#Button#[0-9a-f]{10}/);
   });
 
   it("documents lint's flags in --help", () => {

@@ -2,6 +2,7 @@ import type { ComponentConfig, ComponentsConfig } from "../../schemas/components
 import type { EngineConfig } from "../../schemas/engines.js";
 import type { FixturesConfig } from "../../schemas/fixtures.js";
 import type { OverridesConfig } from "../../schemas/overrides.js";
+import type { OutputConfig } from "../../schemas/output.js";
 import type { RulesConfig } from "../../schemas/rules.js";
 import type { SettingsConfig } from "../../schemas/settings.js";
 import type { StandardsConfig } from "../../schemas/standards.js";
@@ -13,6 +14,7 @@ import type { ResolvedLanternConfig } from "../../types/config.js";
  * declares are present; absent fields leave the previous layer untouched.
  */
 export interface ConfigFragment {
+  readonly output?: OutputConfig | undefined;
   readonly standards?: StandardsConfig | undefined;
   readonly engines?: Partial<EngineConfig> | undefined;
   readonly settings?: SettingsConfig | undefined;
@@ -65,6 +67,7 @@ export function mergeComponents(base: ComponentsConfig, next: ComponentsConfig):
  */
 export function mergeFragment(base: ResolvedLanternConfig, next: ConfigFragment): ResolvedLanternConfig {
   return {
+    output: next.output ?? base.output,
     standards: [...(next.standards ?? base.standards)],
     extends: base.extends,
     engines: { ...base.engines, ...next.engines },
