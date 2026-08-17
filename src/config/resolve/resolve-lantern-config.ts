@@ -23,6 +23,7 @@ export function resolveLanternConfig(raw: RawConfig): ResolvedLanternConfig {
   }
 
   const projectFragment: ConfigFragment = {
+    output: raw.output,
     standards: raw.standards,
     engines: raw.engines,
     settings: raw.settings,

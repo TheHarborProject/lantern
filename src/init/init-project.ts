@@ -8,11 +8,13 @@ import { ignorePatternsSchema } from "../schemas/ignore-patterns.js";
 import { KNOWN_STANDARDS, type Standard } from "../schemas/standards.js";
 import { resolvePackageManager, type PackageManager } from "../servers/resolve-package-manager.js";
 import { LANTERN_DEFAULTS } from "../config/resolve/lantern-defaults.js";
+import type { OutputMode } from "../schemas/output.js";
 
 const LIKELY_START_SCRIPTS = ["dev", "start", "serve", "preview", "storybook"] as const;
 const UNLIKELY_START_SCRIPTS = new Set(["lint", "test", "format", "typecheck", "build"]);
 const SOURCE_DIRECTORY_CANDIDATES = ["src", "src/components", "components", "app", "packages"] as const;
 export const DEFAULT_STANDARD = LANTERN_DEFAULTS.standards[0] ?? "wcag22-aa";
+export const DEFAULT_OUTPUT_MODE: OutputMode = "compact";
 
 export interface InitProjectInspection {
   readonly projectRoot: string;
@@ -27,6 +29,7 @@ export interface InitPrompter {
   selectStartScript(scripts: readonly string[]): Promise<string | undefined>;
   selectSourceDirectory(candidates: readonly string[]): Promise<string | undefined>;
   selectStandard(standards: readonly Standard[], defaultStandard: Standard): Promise<Standard | undefined>;
+  selectOutputMode(defaultMode: OutputMode): Promise<OutputMode | undefined>;
   confirmIgnorePatterns(): Promise<boolean | undefined>;
   inputIgnorePattern(): Promise<string | undefined>;
   confirmAnotherIgnorePattern(): Promise<boolean | undefined>;
@@ -36,6 +39,7 @@ export interface InitChoices {
   readonly startScript: string;
   readonly sourceDirectory: string;
   readonly standard: Standard;
+  readonly outputMode: OutputMode;
   readonly ignorePatterns: readonly string[];
 }
 
@@ -43,6 +47,7 @@ export interface MinimalInitConfig {
   readonly project: { readonly startScript: string; readonly sourceDirectory?: string };
   readonly standards?: readonly Standard[];
   readonly ignorePatterns?: readonly string[];
+  readonly output?: { readonly mode: OutputMode };
 }
 
 export type InitProjectResult =
@@ -102,6 +107,7 @@ export function createMinimalInitConfig(choices: InitChoices): MinimalInitConfig
       ...(choices.sourceDirectory === "." ? {} : { sourceDirectory: choices.sourceDirectory }),
     },
     ...(choices.standard === DEFAULT_STANDARD ? {} : { standards: [choices.standard] }),
+    ...(choices.outputMode === DEFAULT_OUTPUT_MODE ? {} : { output: { mode: choices.outputMode } }),
     ...(choices.ignorePatterns.length === 0 ? {} : { ignorePatterns: choices.ignorePatterns }),
   };
   configSchema.parse(config);
@@ -172,6 +178,9 @@ export async function initProject(
   const standard = await prompter.selectStandard([...KNOWN_STANDARDS], DEFAULT_STANDARD);
   if (standard === undefined) return { status: "cancelled" };
 
+  const outputMode = await prompter.selectOutputMode(DEFAULT_OUTPUT_MODE);
+  if (outputMode === undefined) return { status: "cancelled" };
+
   const addIgnorePatterns = await prompter.confirmIgnorePatterns();
   if (addIgnorePatterns === undefined) return { status: "cancelled" };
   const ignorePatterns: string[] = [];
@@ -190,6 +199,7 @@ export async function initProject(
     startScript,
     sourceDirectory,
     standard,
+    outputMode,
     ignorePatterns: normalizeIgnorePatterns(ignorePatterns),
   });
   const configPath = join(inspection.projectRoot, ".lantern", "config.json");

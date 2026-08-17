@@ -17,6 +17,7 @@ import type { ResolvedLanternConfig } from "../../types/config.js";
  * This value is treated as immutable; resolution never mutates it in place.
  */
 export const LANTERN_DEFAULTS: ResolvedLanternConfig = {
+  output: { mode: "compact" },
   standards: ["wcag22-aa"],
   extends: [],
   engines: { static: true, rendered: true, axe: false, lighthouse: false },

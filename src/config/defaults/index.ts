@@ -11,6 +11,7 @@ import { defaultProjectConfig } from "./project.js";
 /** Build a fresh starter configuration for Lantern. */
 export function createDefaultConfig(): LanternConfig {
   return {
+    output: { mode: "compact" },
     project: { ...defaultProjectConfig },
     auth: {
       ...defaultAuthConfig,
