@@ -37,7 +37,10 @@ describe("lantern lint", () => {
 
     const output = log.mock.calls.map((call) => String(call[0])).join("\n");
     expect(output).toContain("Button");
-    expect(output).toContain("no checks executed (no check provider configured)");
+    expect(output).toContain("Provider   unavailable\n           no check provider configured");
+    expect(output).toContain("Standard   WCAG 2.2 AA");
+    expect(output).toContain("Summary");
+    expect(output).not.toContain("no checks executed (no check provider configured)");
     expect(process.exitCode).toBe(0);
   });
 
@@ -84,6 +87,66 @@ describe("lantern lint", () => {
 
     expect(process.exitCode).toBe(2);
     expect(error).toHaveBeenCalledWith(expect.stringContaining('"--all" and "--since"'));
+  });
+
+  it("targets a positional path and renders the target selection", async () => {
+    writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
+    writeFileSync(join(root, "Card.tsx"), "export const Card = () => <article />;");
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const program = createProgram();
+    program.exitOverride();
+
+    await program.parseAsync(["lint", "Button.tsx"], { from: "user" });
+
+    const output = log.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(output).toContain("Target     Button.tsx");
+    expect(output).toContain("Selection  1 component");
+    expect(output).toContain("Button");
+    expect(output).not.toContain("Card");
+  });
+
+  it("renders a zero-component selection for an explicit non-component path", async () => {
+    writeFileSync(join(root, "README.md"), "# docs");
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const program = createProgram();
+    program.exitOverride();
+
+    await program.parseAsync(["lint", "README.md"], { from: "user" });
+
+    const output = log.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(output).toContain("Target     README.md");
+    expect(output).toContain("Selection  no components");
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("rejects explicit path targeting combined with --since or --all", async () => {
+    writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const program = createProgram();
+    program.exitOverride();
+
+    await program.parseAsync(["lint", "Button.tsx", "--since", "HEAD~1"], { from: "user" });
+    expect(process.exitCode).toBe(2);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("Cannot combine an explicit path target with --since."));
+
+    process.exitCode = undefined;
+    error.mockClear();
+    const secondProgram = createProgram();
+    secondProgram.exitOverride();
+    await secondProgram.parseAsync(["lint", "Button.tsx", "--all"], { from: "user" });
+    expect(process.exitCode).toBe(2);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("Cannot combine an explicit path target with --all."));
+  });
+
+  it("exits 2 for a nonexistent explicit target path", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const program = createProgram();
+    program.exitOverride();
+
+    await program.parseAsync(["lint", "src/nope"], { from: "user" });
+
+    expect(process.exitCode).toBe(2);
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("Target path does not exist: src/nope"));
   });
 
   it("exits 2 with an actionable error for --since outside a Git repository", async () => {
@@ -145,14 +208,17 @@ describe("lantern lint", () => {
     const output = log.mock.calls.map((call) => String(call[0])).join("\n");
     expect(output).toMatch(/Button\.tsx#Button#[0-9a-f]{10}/);
     expect(output).toContain("(inferred)");
+    expect(output).toContain("#1  size=sm");
   });
 
   it("documents lint's flags in --help", () => {
     const program = createProgram();
     const lint = program.commands.find((command) => command.name() === "lint");
+    const help = lint?.helpInformation() ?? "";
 
-    expect(lint?.helpInformation()).toContain("--since");
-    expect(lint?.helpInformation()).toContain("--configure");
-    expect(lint?.helpInformation()).toContain("--fail-on-skipped");
+    expect(help).toContain("--since");
+    expect(help).toContain("--configure");
+    expect(help).toContain("--fail-on-skipped");
+    expect(help.match(/Usage:/g)).toHaveLength(1);
   });
 });

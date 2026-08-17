@@ -18,7 +18,7 @@ describe("readComponentScanCache", () => {
   });
 
   it("reads back a model written by writeComponentScanCache", () => {
-    const model: CanonicalComponentModel = { version: 1, components: [], diagnostics: [] };
+    const model: CanonicalComponentModel = { version: 2, components: [], diagnostics: [] };
     writeComponentScanCache(root, model);
 
     expect(readComponentScanCache(root)).toEqual(model);

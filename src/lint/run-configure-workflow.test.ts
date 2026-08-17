@@ -24,7 +24,7 @@ function unresolvedComponent(component: string, propName: string): ComponentRepo
 
 function report(components: readonly ComponentReport[]): LintReport {
   return {
-    version: 1,
+    version: 2,
     generatedAt: new Date(0).toISOString(),
     targeting: { mode: { kind: "incremental" }, rescanned: true },
     standards: [{ standard: "wcag22-aa", components }],
@@ -178,7 +178,7 @@ describe("runConfigureWorkflow", () => {
     const result = await runConfigureWorkflow({
       configFilePath,
       report: {
-        version: 1,
+        version: 2,
         generatedAt: new Date(0).toISOString(),
         targeting: { mode: { kind: "incremental" }, rescanned: true },
         standards: [

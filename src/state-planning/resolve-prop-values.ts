@@ -2,7 +2,6 @@ import type { ComponentConfig } from "../schemas/components.js";
 import type { FixturesConfig } from "../schemas/fixtures.js";
 import type { AccessibilityComponent, ResolvedComponentProp } from "../types/component-scan.js";
 import { inferPropType } from "./infer-prop-type.js";
-import { isAccessibilityRelevantPropName } from "./is-accessibility-relevant-prop.js";
 import type { ResolvedPropValues } from "./types.js";
 
 export interface PropResolutionContext {
@@ -44,10 +43,7 @@ export function resolvePropValues(
         ? { status: "unresolved", reason: `Configured "values" for "${prop.name}" is empty.` }
         : { status: "omitted" };
     }
-    return {
-      status: "resolved",
-      plan: { name: prop.name, required: prop.required, source: "explicit", values: propConfig.values },
-    };
+    return resolved(prop.name, prop.required, "explicit", propConfig.values, true);
   }
 
   if (propConfig?.fixture !== undefined) {
@@ -63,30 +59,18 @@ export function resolvePropValues(
         ? { status: "unresolved", reason: `Fixture "${propConfig.fixture}" for "${prop.name}" is empty.` }
         : { status: "omitted" };
     }
-    return {
-      status: "resolved",
-      plan: { name: prop.name, required: prop.required, source: "fixture", values: fixtureValues },
-    };
+    return resolved(prop.name, prop.required, "fixture", fixtureValues, true);
   }
 
-  const eligibleForInference =
-    prop.required ||
-    isAccessibilityRelevantPropName(prop.name, context.accessibility) ||
-    prop.origin === "declared";
+  const eligibleForInference = prop.required || prop.origin === "component";
 
   if (eligibleForInference) {
     const inferred = inferPropType(prop.type);
     if (inferred.kind === "boolean") {
-      return {
-        status: "resolved",
-        plan: { name: prop.name, required: prop.required, source: "inferred", values: [false, true] },
-      };
+      return resolved(prop.name, prop.required, "inferred", [false, true], prop.origin === "component");
     }
     if (inferred.kind === "literal-union") {
-      return {
-        status: "resolved",
-        plan: { name: prop.name, required: prop.required, source: "inferred", values: inferred.values },
-      };
+      return resolved(prop.name, prop.required, "inferred", inferred.values, prop.origin === "component");
     }
   }
 
@@ -97,4 +81,14 @@ export function resolvePropValues(
     };
   }
   return { status: "omitted" };
+}
+
+function resolved(
+  name: string,
+  required: boolean,
+  source: ResolvedPropValues["source"],
+  values: readonly unknown[],
+  stateDimension: boolean,
+): PropResolution {
+  return { status: "resolved", plan: { name, required, source, values, stateDimension } };
 }

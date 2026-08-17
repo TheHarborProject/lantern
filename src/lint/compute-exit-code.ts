@@ -17,6 +17,9 @@ export interface ComputeExitCodeOptions {
  * - `skipped`/`unresolved` components block only with `--fail-on-skipped`.
  */
 export function computeExitCode(report: LintReport, options: ComputeExitCodeOptions): 0 | 1 {
+  if (options.failOnSkipped && (report.diagnostics ?? []).length > 0) {
+    return 1;
+  }
   for (const standard of report.standards) {
     for (const component of standard.components) {
       if (options.failOnSkipped && component.status === "skipped") {

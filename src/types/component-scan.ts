@@ -5,7 +5,7 @@ export type ComponentAnalysisStatus = "complete" | "partial";
  * Whether a prop is authored by the component itself or resolved from an
  * inherited/intersected type (React, the DOM lib, a design-system helper…).
  */
-export type PropOrigin = "declared" | "inherited";
+export type PropOrigin = "component" | "project-inherited" | "external-inherited";
 
 export interface ComponentAnalysis {
   readonly status: ComponentAnalysisStatus;
@@ -30,6 +30,8 @@ export interface ResolvedComponentProp {
   readonly origin: PropOrigin;
   /** Portable location of the declaration (project path or library hint). */
   readonly provenance: string;
+  /** Portable component prop annotation/surface that caused the prop to be visible. */
+  readonly ownerProvenance?: string | undefined;
 }
 
 /** Statically observed rendering facts used by derived projections. */
@@ -58,7 +60,7 @@ export interface CanonicalComponent {
  * independently per view.
  */
 export interface CanonicalComponentModel {
-  readonly version: 1;
+  readonly version: 2;
   readonly components: readonly CanonicalComponent[];
   readonly diagnostics: readonly ComponentScanDiagnostic[];
 }
@@ -83,7 +85,7 @@ export interface DiscoveredComponent {
 
 /** The human-readable projection written to `.lantern/scan.json`. */
 export interface ComponentScanIndex {
-  readonly version: 1;
+  readonly version: 2;
   readonly components: readonly DiscoveredComponent[];
   readonly diagnostics: readonly ComponentScanDiagnostic[];
 }
@@ -121,7 +123,7 @@ export interface AccessibilityComponent {
 
 /** The accessibility projection written to `.lantern/accessibility.json`. */
 export interface AccessibilityIndex {
-  readonly version: 1;
+  readonly version: 2;
   readonly components: readonly AccessibilityComponent[];
 }
 
@@ -133,7 +135,9 @@ export interface AccessibilityIndex {
  * user decisions — those live in `lantern.config.json`.
  */
 export interface ScanStateCache {
-  readonly version: 1;
+  readonly version: 2;
   /** Portable, project-relative source path → content hash, as of the last successful scan. */
   readonly sourceHashes: Readonly<Record<string, string>>;
+  /** Stable hash of semantic scanner inputs beyond source file contents. */
+  readonly fingerprint: string;
 }

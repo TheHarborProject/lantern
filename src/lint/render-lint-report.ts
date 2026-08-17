@@ -1,4 +1,13 @@
-import type { ComponentReport, LintReport, ReportStatus, StateReport } from "./types.js";
+import type {
+  ComponentReport,
+  LintDiagnostic,
+  LintReport,
+  LintTargetSelectionInfo,
+  ReportStatus,
+  StandardReport,
+  StateDimensionReport,
+  StateReport,
+} from "./types.js";
 
 export interface RenderLintReportOptions {
   readonly verbose: boolean;
@@ -7,111 +16,163 @@ export interface RenderLintReportOptions {
 const STATUS_ICON: Record<ReportStatus, string> = {
   pass: "✓",
   fail: "✗",
-  review: "•",
-  skipped: "⚠",
+  review: "◌",
+  skipped: "↷",
 };
 
-/**
- * Render a {@link LintReport} as test-runner-style terminal text (RFC-007).
- *
- * Terminal text is derived entirely from the structured report — nothing here
- * decides pass/fail/skip on its own. Before RFC-008 attaches a real check
- * provider, every generated state carries no checks, so no check line is ever
- * printed: fabricating `✓`/`✗` check output ahead of a real engine would be
- * exactly the kind of untruthful reporting this RFC forbids.
- */
+const STANDARD_LABELS: Readonly<Record<string, string>> = {
+  "wcag22-aa": "WCAG 2.2 AA",
+  "wcag21-aa": "WCAG 2.1 AA",
+  "rgaa4.1": "RGAA 4.1",
+};
+
 export function renderLintReport(report: LintReport, options: RenderLintReportOptions): string {
-  const lines: string[] = [];
+  const lines: string[] = ["Lantern lint", ""];
+
+  pushSection(lines, renderTargeting(report, options));
+  pushSection(lines, renderProvider(report));
+  lines.push(...renderDiagnostics(report.diagnostics ?? [], options));
 
   for (const standard of report.standards) {
-    lines.push(standard.standard, "");
-    for (const component of standard.components) {
-      lines.push(...renderComponent(component, options));
-    }
-    lines.push("");
+    lines.push(...renderStandard(standard, options), "");
   }
 
   if (report.standards.length === 0) {
-    lines.push("No standards are configured — nothing to report.", "");
+    lines.push("No standards are configured. Nothing to report.", "");
   }
 
   lines.push(...renderSummary(report));
-
   return lines.join("\n").replace(/\n+$/, "\n");
 }
 
+function pushSection(lines: string[], section: readonly string[]): void {
+  if (section.length > 0) {
+    lines.push(...section, "");
+  }
+}
+
+function renderTargeting(report: LintReport, options: RenderLintReportOptions): string[] {
+  const { mode, selection } = report.targeting;
+  if (mode.kind === "path" && selection?.kind === "path") {
+    return [
+      `Target     ${selection.path}`,
+      ...(options.verbose ? [`Type       ${selection.pathKind}`] : []),
+      `Selection  ${selection.componentCount === 0 ? "no components" : `${selection.componentCount} ${plural(selection.componentCount, "component", "components")}`}`,
+    ];
+  }
+  if (mode.kind !== "since") {
+    return [];
+  }
+  return [
+    `Target     changes since ${mode.ref}`,
+    `Selection  ${describeSelection(selection)}`,
+    ...(selection?.kind === "fallback" ? [`Reason     ${selection.reason}`] : []),
+  ];
+}
+
+function describeSelection(selection: LintTargetSelectionInfo | undefined): string {
+  if (selection === undefined || selection.kind === "all") {
+    return "full component set";
+  }
+  if (selection.kind === "none") {
+    return "no affected components";
+  }
+  if (selection.kind === "affected") {
+    return `${selection.componentCount} affected ${plural(selection.componentCount, "component", "components")}`;
+  }
+  return "full component set";
+}
+
+function renderProvider(report: LintReport): string[] {
+  if (report.provider?.kind === "available") {
+    return [`Provider   ${report.provider.provider}`];
+  }
+  if (report.provider?.kind === "unavailable") {
+    return ["Provider   unavailable", `           ${report.provider.reason}`];
+  }
+  return [];
+}
+
+function renderDiagnostics(diagnostics: readonly LintDiagnostic[], options: RenderLintReportOptions): string[] {
+  if (diagnostics.length === 0) {
+    return [];
+  }
+
+  const lines = ["Review", ""];
+  for (const diagnostic of diagnostics) {
+    const target = diagnostic.component === undefined ? diagnostic.source : `${diagnostic.source}#${diagnostic.component}`;
+    lines.push(`! ${target}`, `  ${diagnostic.message}`);
+    if (options.verbose) {
+      lines.push(`  source: ${diagnostic.source}`);
+    }
+  }
+  lines.push("");
+  return lines;
+}
+
+function renderStandard(standard: StandardReport, options: RenderLintReportOptions): string[] {
+  const label = standardLabel(standard.standard);
+  const lines = [`Standard   ${options.verbose && label !== standard.standard ? `${label} (${standard.standard})` : label}`, "", "Components", ""];
+  for (const component of standard.components) {
+    lines.push(...renderComponent(component, options), "");
+  }
+  return lines;
+}
+
 function renderComponent(component: ComponentReport, options: RenderLintReportOptions): string[] {
-  const icon = STATUS_ICON[component.status];
+  const lines = [`${STATUS_ICON[component.status]} ${component.component}`];
 
   if (component.planStatus !== "ready") {
-    return [`${icon} ${component.component}`, `  ↷ skipped — ${component.reason ?? "no reason given"}`];
+    lines.push(`  skipped · ${component.reason ?? "no reason given"}`);
+    return lines;
   }
 
-  const lines: string[] = [`${icon} ${component.component}`];
-  const onlyState = component.states.length === 1 && !options.verbose ? component.states[0] : undefined;
+  lines.push(...renderPlanning(component));
 
-  if (onlyState !== undefined) {
-    // Avoid unnecessary state nesting for a component with one obvious state.
-    lines.push(...renderStateChecks(onlyState, "  ", options));
-  } else {
-    for (const state of component.states) {
-      lines.push(...renderState(state, options));
-    }
+  const dimensions = component.dimensions ?? [];
+  if (dimensions.length > 0 && options.verbose) {
+    lines.push("", "  Dimensions");
+    lines.push(...dimensions.map(renderDimension));
   }
 
+  if (options.verbose && component.states.length > 0) {
+    lines.push("", `  Showing ${component.states.length} selected states from ${component.totalPossibleStates} theoretical states`);
+    lines.push(`  Selection: ${component.truncated ? "coverage-bounded" : "exhaustive"}`);
+    component.states.forEach((state, index) => {
+      lines.push(`  #${index + 1}  ${describeState(state)}`);
+      lines.push(`      state: ${state.stateId}`);
+    });
+  }
+
+  return lines;
+}
+
+function renderPlanning(component: ComponentReport): string[] {
+  const selected = component.states.length;
   if (component.truncated) {
-    lines.push(
-      `  ↷ ${component.states.length}/${component.totalPossibleStates} states shown (truncated at maxStates=${component.maxStates}; not exhaustive)`,
-    );
+    return [
+      `  ${component.totalPossibleStates} states planned`,
+      `  ${selected} selected · coverage-bounded`,
+    ];
   }
-
-  return lines;
+  if (selected === 1) {
+    return ["  1 state"];
+  }
+  return [`  ${selected} states · exhaustive`];
 }
 
-function renderState(state: StateReport, options: RenderLintReportOptions): string[] {
-  const label = describeState(state);
-  const lines = [`  ${STATUS_ICON[state.status]} ${label}`];
-  lines.push(...renderStateChecks(state, "    ", options));
-  return lines;
-}
-
-function renderStateChecks(state: StateReport, indent: string, options: RenderLintReportOptions): string[] {
-  const lines: string[] = [];
-
-  if (state.checks.length === 0) {
-    lines.push(`${indent}no checks executed (no check provider configured)`);
-  } else {
-    for (const check of state.checks) {
-      lines.push(`${indent}${STATUS_ICON[check.status]} ${check.message ?? check.ruleId}`);
-      if (check.location !== undefined) {
-        lines.push(`${indent}  ${check.location.file}${formatPosition(check.location)}`);
-      }
-      if (options.verbose) {
-        lines.push(`${indent}  ${check.ruleId} (${check.severity})`);
-      }
-    }
-  }
-
-  if (options.verbose) {
-    lines.push(`${indent}state: ${state.stateId}`);
-    for (const [propName, source] of Object.entries(state.propProvenance)) {
-      lines.push(`${indent}${propName}: ${JSON.stringify(state.props[propName])} (${source})`);
-    }
-  }
-
-  return lines;
+function renderDimension(dimension: StateDimensionReport): string {
+  const valueList = dimension.values.map(formatValue).join(" | ");
+  const clipped = valueList.length > 100 ? `${valueList.slice(0, 97)}...` : valueList;
+  return `    ${dimension.name.padEnd(10)} ${clipped} (${dimension.source})`;
 }
 
 function describeState(state: StateReport): string {
-  const values = Object.values(state.props).map((value) => JSON.stringify(value));
-  return values.length === 0 ? "default" : values.join(" / ");
-}
-
-function formatPosition(location: { readonly line?: number; readonly column?: number }): string {
-  if (location.line === undefined) {
-    return "";
+  const entries = Object.entries(state.props);
+  if (entries.length === 0) {
+    return "default";
   }
-  return location.column === undefined ? `:${location.line}` : `:${location.line}:${location.column}`;
+  return entries.map(([name, value]) => `${name}=${formatValue(value)}`).join("  ");
 }
 
 function renderSummary(report: LintReport): string[] {
@@ -119,14 +180,25 @@ function renderSummary(report: LintReport): string[] {
   const totalComponents =
     summary.componentsPass + summary.componentsFail + summary.componentsReview + summary.componentsSkipped;
   const totalChecks = summary.checksPass + summary.checksFail + summary.checksReview;
-
   const lines = [
-    `Components  ${summary.componentsPass} passed | ${summary.componentsFail} failed | ${summary.componentsReview} review | ${summary.componentsSkipped} skipped (${totalComponents})`,
+    "Summary",
+    `${totalComponents} ${plural(totalComponents, "component", "components")} · ${summary.componentsPass} passed · ${summary.componentsFail} failed · ${summary.componentsReview} review · ${summary.componentsSkipped} skipped`,
   ];
   if (totalChecks > 0) {
-    lines.push(`Checks      ${summary.checksPass} passed | ${summary.checksFail} failed | ${summary.checksReview} review (${totalChecks})`);
+    lines.push(`${totalChecks} ${plural(totalChecks, "check", "checks")} · ${summary.checksPass} passed · ${summary.checksFail} failed · ${summary.checksReview} review`);
   }
-  lines.push(`Duration    ${(summary.durationMs / 1000).toFixed(2)}s`);
-
+  lines.push(`${(summary.durationMs / 1000).toFixed(2)}s`);
   return lines;
+}
+
+function standardLabel(id: string): string {
+  return STANDARD_LABELS[id] ?? id;
+}
+
+function formatValue(value: unknown): string {
+  return typeof value === "string" ? value : JSON.stringify(value);
+}
+
+function plural(count: number, singular: string, pluralForm: string): string {
+  return count === 1 ? singular : pluralForm;
 }

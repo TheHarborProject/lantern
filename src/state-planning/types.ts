@@ -13,6 +13,8 @@ export interface ResolvedPropValues {
   readonly required: boolean;
   readonly source: PropValueSource;
   readonly values: readonly unknown[];
+  /** Whether multiple values should branch into separate generated states. */
+  readonly stateDimension: boolean;
 }
 
 /** A required prop that could not be resolved from configuration or safe inference. */
@@ -52,6 +54,8 @@ export interface ReadyComponentStatePlan extends ComponentStatePlanBase {
   readonly status: "ready";
   /** Resolved props that participate in the plan, in stable order. */
   readonly dimensions: readonly ResolvedPropValues[];
+  /** Resolved props supplied to renders but not used for branching. */
+  readonly fixedProps: readonly ResolvedPropValues[];
   readonly states: readonly GeneratedState[];
   /** The full Cartesian product size before bounding/truncation. */
   readonly totalPossibleStates: number;

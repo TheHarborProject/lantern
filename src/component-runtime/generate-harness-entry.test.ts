@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { generateHarnessEntry } from "./generate-harness-entry.js";
 
 describe("generateHarnessEntry", () => {
-  it("imports a default export, serializes props, and mounts into #root", () => {
+  it("imports a default export and delegates to the maintained harness without serializing props", () => {
     const entry = generateHarnessEntry({
       componentImportPath: "/project/src/Button.tsx",
       exportName: "default",
@@ -10,10 +10,9 @@ describe("generateHarnessEntry", () => {
     });
 
     expect(entry).toContain('import LanternComponent from "/project/src/Button.tsx";');
-    expect(entry).toContain('const props = {"label":"Save","disabled":false};');
-    expect(entry).toContain('document.getElementById("root")');
-    expect(entry).toContain("createRoot(container).render(tree);");
-    expect(entry).toContain("window.__lanternMounted__ = true;");
+    expect(entry).toContain("mountLanternHarness({ component: LanternComponent });");
+    expect(entry).not.toContain("Save");
+    expect(entry).not.toContain("disabled");
     expect(entry).not.toContain("LanternWrapper");
   });
 
@@ -37,7 +36,7 @@ describe("generateHarnessEntry", () => {
     });
 
     expect(entry).toContain('import { Providers as LanternWrapper } from "/project/lantern/wrapper.tsx";');
-    expect(entry).toContain("createElement(LanternWrapper, null, rendered)");
+    expect(entry).toContain("mountLanternHarness({ component: LanternComponent, wrapper: LanternWrapper });");
   });
 
   it("reports an actionable failure instead of throwing", () => {
@@ -47,7 +46,7 @@ describe("generateHarnessEntry", () => {
       props: {},
     });
 
-    expect(entry).toContain("window.__lanternError__");
-    expect(entry).toContain("componentDidCatch");
+    expect(entry).toContain("mountLanternHarness");
+    expect(entry).not.toContain("componentDidCatch");
   });
 });

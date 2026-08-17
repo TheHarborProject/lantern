@@ -17,7 +17,7 @@ describe("writeScanIndex", () => {
   });
 
   it("writes a stable regenerable index under .lantern", () => {
-    const index: ComponentScanIndex = { version: 1, components: [], diagnostics: [] };
+    const index: ComponentScanIndex = { version: 2, components: [], diagnostics: [] };
 
     const filePath = writeScanIndex(root, index);
     const firstContent = readFileSync(filePath, "utf-8");

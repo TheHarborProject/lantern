@@ -30,7 +30,7 @@ function component(overrides: Partial<ComponentReport> = {}): ComponentReport {
 
 function report(components: readonly ComponentReport[]): LintReport {
   return {
-    version: 1,
+    version: 2,
     generatedAt: new Date(0).toISOString(),
     targeting: { mode: { kind: "incremental" }, rescanned: true },
     standards: [{ standard: "wcag22-aa", components }],

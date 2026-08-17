@@ -11,21 +11,21 @@ const buttonComponent: CanonicalComponent = {
   name: "Button",
   exportKind: "named",
   props: [
-    { name: "disabled", type: "boolean | undefined", required: false, origin: "inherited", provenance: "react" },
-    { name: "onClick", type: "() => void", required: false, origin: "inherited", provenance: "react" },
+    { name: "disabled", type: "boolean | undefined", required: false, origin: "external-inherited", provenance: "react" },
+    { name: "onClick", type: "() => void", required: false, origin: "external-inherited", provenance: "react" },
     {
       name: "size",
       type: '"sm" | "md" | "lg" | null',
       required: false,
-      origin: "declared",
+      origin: "component",
       provenance: "Button.tsx",
     },
-    { name: "tabIndex", type: "number | undefined", required: false, origin: "inherited", provenance: "react" },
+    { name: "tabIndex", type: "number | undefined", required: false, origin: "external-inherited", provenance: "react" },
     {
       name: "variant",
       type: '"default" | "outline" | "destructive"',
       required: true,
-      origin: "declared",
+      origin: "component",
       provenance: "Button.tsx",
     },
   ],
@@ -51,7 +51,7 @@ const avatarComponent: CanonicalComponent = {
   exportName: "Avatar",
   name: "Avatar",
   exportKind: "named",
-  props: [{ name: "user", type: "User", required: true, origin: "declared", provenance: "Avatar.tsx" }],
+  props: [{ name: "user", type: "User", required: true, origin: "component", provenance: "Avatar.tsx" }],
   rendering: { intrinsicElements: ["img"], analyzable: true },
   analysis: { status: "complete", diagnostics: [] },
 };
@@ -76,10 +76,10 @@ describe("planComponentState", () => {
     if (plan.status !== "ready") {
       return;
     }
-    expect(plan.dimensions.map((dimension) => dimension.name)).toEqual(["disabled", "size", "variant"]);
-    expect(plan.totalPossibleStates).toBe(2 * 4 * 3);
+    expect(plan.dimensions.map((dimension) => dimension.name)).toEqual(["size", "variant"]);
+    expect(plan.totalPossibleStates).toBe(4 * 3);
     expect(plan.truncated).toBe(false);
-    expect(plan.states).toHaveLength(24);
+    expect(plan.states).toHaveLength(12);
     // Inherited, non-accessibility-relevant and handler props never become dimensions.
     for (const state of plan.states) {
       expect(state.props).not.toHaveProperty("tabIndex");
@@ -124,7 +124,7 @@ describe("planComponentState", () => {
       return;
     }
     expect(plan.states).toHaveLength(5);
-    expect(plan.totalPossibleStates).toBe(24);
+    expect(plan.totalPossibleStates).toBe(12);
     expect(plan.truncated).toBe(true);
     expect(plan.maxStates).toBe(5);
   });
@@ -152,7 +152,7 @@ describe("planComponentState", () => {
       return;
     }
     // variant is now fixed (one explicit value), so only disabled x size branch.
-    expect(plan.totalPossibleStates).toBe(2 * 4);
+    expect(plan.totalPossibleStates).toBe(4);
     expect(plan.states.every((state) => state.props["variant"] === "destructive")).toBe(true);
   });
 

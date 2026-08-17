@@ -6,6 +6,7 @@ import type { ResolvedConfig } from "../types/config.js";
 import { resolveLintTargets } from "./resolve-lint-targets.js";
 import type {
   ComponentReport,
+  LintDiagnostic,
   LintReport,
   LintSummary,
   LintTargetMode,
@@ -19,6 +20,7 @@ export interface BuildLintReportOptions {
   readonly config: ResolvedConfig;
   readonly mode: LintTargetMode;
   readonly maxStates?: number | undefined;
+  readonly cwd?: string | undefined;
 }
 
 /**
@@ -29,12 +31,13 @@ export interface BuildLintReportOptions {
  * every state's `checks` array stays empty until RFC-008 attaches a provider.
  */
 export function buildLintReport(options: BuildLintReportOptions): LintReport {
-  const { config, mode, maxStates = DEFAULT_MAX_STATES } = options;
+  const { config, mode, maxStates = DEFAULT_MAX_STATES, cwd } = options;
   const startedAt = Date.now();
 
-  const targets = resolveLintTargets({ root: config.project.root, ignorePatterns: config.ignorePatterns, mode });
+  const targets = resolveLintTargets({ root: config.project.root, cwd, ignorePatterns: config.ignorePatterns, mode });
   const accessibilityById = indexAccessibility(targets.model);
   const includedComponents = filterComponents(targets.model, targets.targetComponentIds);
+  const configResolution = resolveComponentConfigs(includedComponents, config);
 
   // Component state planning (RFC-006) does not vary by standard — no
   // standard-aware check provider exists yet (RFC-008) — so it is computed
@@ -43,7 +46,7 @@ export function buildLintReport(options: BuildLintReportOptions): LintReport {
   // evaluation context (RFC-005): none is treated as more "representative"
   // than another, and none is merged into a synthetic combined result.
   const componentReports = includedComponents.map((component) =>
-    buildComponentReport(component, accessibilityById, config, maxStates),
+    buildComponentReport(component, accessibilityById, config, maxStates, configResolution.configsById),
   );
 
   const standards: StandardReport[] = config.standards.map((standard) => ({
@@ -52,9 +55,18 @@ export function buildLintReport(options: BuildLintReportOptions): LintReport {
   }));
 
   return {
-    version: 1,
+    version: 2,
     generatedAt: new Date(startedAt).toISOString(),
-    targeting: { mode, rescanned: targets.rescanned },
+    targeting: { mode, rescanned: targets.rescanned, selection: targets.selection },
+    provider: { kind: "unavailable", reason: "no check provider configured" },
+    diagnostics: [
+      ...targets.model.diagnostics.map((diagnostic): LintDiagnostic => ({
+        source: diagnostic.source,
+        component: diagnostic.exportName,
+        message: diagnostic.message,
+      })),
+      ...configResolution.diagnostics,
+    ],
     standards,
     summary: summarizePlanning(componentReports, Date.now() - startedAt),
   };
@@ -79,9 +91,10 @@ function buildComponentReport(
   accessibilityById: ReadonlyMap<string, AccessibilityComponent>,
   config: ResolvedConfig,
   maxStates: number,
+  configsById: ReadonlyMap<string, NonNullable<ResolvedConfig["components"][string]>>,
 ): ComponentReport {
   const accessibility = accessibilityById.get(component.id) ?? emptyAccessibility(component);
-  const componentConfig = config.components[component.name];
+  const componentConfig = configsById.get(component.id);
 
   const plan = planComponentState({
     component,
@@ -92,6 +105,43 @@ function buildComponentReport(
   });
 
   return toComponentReport(component, plan, maxStates);
+}
+
+function resolveComponentConfigs(
+  components: readonly CanonicalComponent[],
+  config: ResolvedConfig,
+): {
+  readonly configsById: ReadonlyMap<string, NonNullable<ResolvedConfig["components"][string]>>;
+  readonly diagnostics: readonly LintDiagnostic[];
+} {
+  const configsById = new Map<string, NonNullable<ResolvedConfig["components"][string]>>();
+  const diagnostics: LintDiagnostic[] = [];
+  const idsByName = new Map<string, string[]>();
+
+  for (const component of components) {
+    idsByName.set(component.name, [...(idsByName.get(component.name) ?? []), component.id]);
+  }
+
+  for (const [key, componentConfig] of Object.entries(config.components)) {
+    const exact = components.find((component) => component.id === key);
+    if (exact !== undefined) {
+      configsById.set(exact.id, componentConfig);
+      continue;
+    }
+
+    const matchingIds = idsByName.get(key) ?? [];
+    if (matchingIds.length === 1) {
+      configsById.set(matchingIds[0] ?? "", componentConfig);
+    } else if (matchingIds.length > 1) {
+      diagnostics.push({
+        source: "lantern.config.json",
+        component: key,
+        message: `Component config key "${key}" is ambiguous; use one of: ${matchingIds.join(", ")}.`,
+      });
+    }
+  }
+
+  return { configsById, diagnostics };
 }
 
 function toComponentReport(
@@ -111,6 +161,7 @@ function toComponentReport(
       planStatus: "skipped",
       status: "skipped",
       states: [],
+      dimensions: [],
       reason: "Explicitly skipped in configuration.",
       truncated: false,
       totalPossibleStates: 0,
@@ -124,6 +175,7 @@ function toComponentReport(
       planStatus: "unresolved",
       status: "skipped",
       states: [],
+      dimensions: [],
       unresolvedProps: plan.unresolvedProps,
       reason: describeUnresolved(plan.unresolvedProps.map((prop) => prop.name)),
       truncated: false,
@@ -147,6 +199,11 @@ function toComponentReport(
     planStatus: "ready",
     status: aggregateStatus(states.map((state) => state.status)),
     states,
+    dimensions: plan.dimensions.map((dimension) => ({
+      name: dimension.name,
+      values: dimension.values,
+      source: dimension.source,
+    })),
     truncated: plan.truncated,
     totalPossibleStates: plan.totalPossibleStates,
     maxStates: plan.maxStates,

@@ -3,11 +3,11 @@ import type { CanonicalComponentModel, ResolvedComponentProp } from "../types/co
 import { projectAccessibility } from "./project-accessibility.js";
 
 function prop(name: string): ResolvedComponentProp {
-  return { name, type: "unknown", required: false, origin: "inherited", provenance: "lib" };
+  return { name, type: "unknown", required: false, origin: "external-inherited", provenance: "lib" };
 }
 
 function model(components: CanonicalComponentModel["components"]): CanonicalComponentModel {
-  return { version: 1, components, diagnostics: [] };
+  return { version: 2, components, diagnostics: [] };
 }
 
 describe("projectAccessibility", () => {

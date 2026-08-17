@@ -193,6 +193,26 @@ describe("resolveLintTargets", () => {
     expect(result.targetComponentIds).toEqual(new Set());
   });
 
+  it("records a deleted source fallback reason for --since output", () => {
+    writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
+    writeFileSync(join(root, "format-label.ts"), "export const formatLabel = (value: string) => value;");
+    git(["init", "-q"], root);
+    git(["config", "user.name", "Lantern Test"], root);
+    git(["config", "user.email", "test@lantern.dev"], root);
+    git(["add", "-A"], root);
+    git(["commit", "-q", "-m", "initial"], root);
+    git(["branch", "base"], root);
+
+    rmSync(join(root, "format-label.ts"));
+    git(["add", "-A"], root);
+    git(["commit", "-q", "-m", "delete shared source"], root);
+
+    const result = resolveLintTargets({ root, ignorePatterns: [], mode: { kind: "since", ref: "base" } });
+
+    expect(result.targetComponentIds).toBeUndefined();
+    expect(result.selection).toEqual({ kind: "fallback", reason: "source deleted: format-label.ts" });
+  });
+
   it("honors ignorePatterns during rescan", () => {
     writeButton(root);
     mkdirSync(join(root, "generated"), { recursive: true });
@@ -201,5 +221,82 @@ describe("resolveLintTargets", () => {
     const result = resolveLintTargets({ root, ignorePatterns: ["generated/"], mode: { kind: "incremental" } });
 
     expect(result.model.components.map((component) => component.name)).toEqual(["Button"]);
+  });
+
+  it("targets all components sourced from an explicit file", () => {
+    writeFileSync(join(root, "controls.tsx"), "export const TextInput = () => <input />; export const Select = () => <select />;");
+    writeButton(root);
+
+    const result = resolveLintTargets({ root, cwd: root, ignorePatterns: [], mode: { kind: "path", path: "controls.tsx" } });
+
+    const selected = result.model.components.filter((component) => result.targetComponentIds?.has(component.id));
+    expect(selected.map((component) => component.name).sort()).toEqual(["Select", "TextInput"]);
+    expect(result.selection).toEqual({ kind: "path", path: "controls.tsx", pathKind: "file", componentCount: 2 });
+  });
+
+  it("supports absolute file paths", () => {
+    writeButton(root);
+
+    const result = resolveLintTargets({ root, cwd: root, ignorePatterns: [], mode: { kind: "path", path: join(root, "Button.tsx") } });
+
+    expect(result.targetComponentIds).toEqual(new Set(["Button.tsx#Button"]));
+    expect(result.selection).toEqual({ kind: "path", path: "Button.tsx", pathKind: "file", componentCount: 1 });
+  });
+
+  it("targets components recursively under an explicit directory without prefix collisions", () => {
+    mkdirSync(join(root, "src", "components", "ui", "nested"), { recursive: true });
+    mkdirSync(join(root, "src", "components", "ui-old"), { recursive: true });
+    writeFileSync(join(root, "src", "components", "ui", "Button.tsx"), "export const Button = () => <button />;");
+    writeFileSync(join(root, "src", "components", "ui", "nested", "Input.tsx"), "export const Input = () => <input />;");
+    writeFileSync(join(root, "src", "components", "ui-old", "Legacy.tsx"), "export const Legacy = () => <button />;");
+
+    const result = resolveLintTargets({ root, cwd: root, ignorePatterns: [], mode: { kind: "path", path: "src/components/ui" } });
+
+    const selected = result.model.components.filter((component) => result.targetComponentIds?.has(component.id));
+    expect(selected.map((component) => component.name).sort()).toEqual(["Button", "Input"]);
+    expect(result.selection).toEqual({ kind: "path", path: "src/components/ui", pathKind: "directory", componentCount: 2 });
+  });
+
+  it("supports dot and absolute directory paths", () => {
+    writeButton(root);
+    writeFileSync(join(root, "Card.tsx"), "export const Card = () => <article />;");
+
+    const dot = resolveLintTargets({ root, cwd: root, ignorePatterns: [], mode: { kind: "path", path: "." } });
+    const absolute = resolveLintTargets({ root, cwd: root, ignorePatterns: [], mode: { kind: "path", path: root } });
+
+    expect(dot.targetComponentIds).toEqual(new Set(["Button.tsx#Button", "Card.tsx#Card"]));
+    expect(absolute.targetComponentIds).toEqual(dot.targetComponentIds);
+    expect(dot.selection).toEqual({ kind: "path", path: ".", pathKind: "directory", componentCount: 2 });
+  });
+
+  it("returns an empty selection for existing files or directories without discovered components", () => {
+    writeFileSync(join(root, "README.md"), "# docs");
+    writeFileSync(join(root, "utils.ts"), "export const add = (left: number, right: number) => left + right;");
+    mkdirSync(join(root, "empty"), { recursive: true });
+
+    const readme = resolveLintTargets({ root, cwd: root, ignorePatterns: [], mode: { kind: "path", path: "README.md" } });
+    const utils = resolveLintTargets({ root, cwd: root, ignorePatterns: [], mode: { kind: "path", path: "utils.ts" } });
+    const empty = resolveLintTargets({ root, cwd: root, ignorePatterns: [], mode: { kind: "path", path: "empty" } });
+
+    expect(readme.targetComponentIds).toEqual(new Set());
+    expect(utils.targetComponentIds).toEqual(new Set());
+    expect(empty.targetComponentIds).toEqual(new Set());
+  });
+
+  it("does not bypass ignore patterns for explicit directories", () => {
+    mkdirSync(join(root, "src", "ignored"), { recursive: true });
+    writeFileSync(join(root, "src", "Visible.tsx"), "export const Visible = () => <div />;");
+    writeFileSync(join(root, "src", "ignored", "Hidden.tsx"), "export const Hidden = () => <div />;");
+
+    const result = resolveLintTargets({ root, cwd: root, ignorePatterns: ["src/ignored/"], mode: { kind: "path", path: "src" } });
+
+    const selected = result.model.components.filter((component) => result.targetComponentIds?.has(component.id));
+    expect(selected.map((component) => component.name)).toEqual(["Visible"]);
+  });
+
+  it("fails clearly for nonexistent explicit paths", () => {
+    expect(() =>
+      resolveLintTargets({ root, cwd: root, ignorePatterns: [], mode: { kind: "path", path: "src/nope" } }),
+    ).toThrow("Target path does not exist: src/nope");
   });
 });

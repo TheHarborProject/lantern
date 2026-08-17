@@ -21,6 +21,7 @@ function component(overrides: Partial<ComponentReport> = {}): ComponentReport {
     planStatus: "ready",
     status: "review",
     states: [state()],
+    dimensions: [],
     truncated: false,
     totalPossibleStates: 1,
     maxStates: 50,
@@ -30,9 +31,11 @@ function component(overrides: Partial<ComponentReport> = {}): ComponentReport {
 
 function report(overrides: Partial<LintReport> = {}): LintReport {
   return {
-    version: 1,
+    version: 2,
     generatedAt: new Date(0).toISOString(),
-    targeting: { mode: { kind: "incremental" }, rescanned: true },
+    targeting: { mode: { kind: "incremental" }, rescanned: true, selection: { kind: "all" } },
+    provider: { kind: "unavailable", reason: "no check provider configured" },
+    diagnostics: [],
     standards: [{ standard: "wcag22-aa", components: [component()] }],
     summary: {
       componentsPass: 0,
@@ -49,159 +52,161 @@ function report(overrides: Partial<LintReport> = {}): LintReport {
 }
 
 describe("renderLintReport", () => {
-  it("does not fabricate check lines when no checks were executed", () => {
-    const output = renderLintReport(report(), { verbose: false });
+  it("renders concise default output without individual states", () => {
+    const output = renderLintReport(report({
+      standards: [{
+        standard: "wcag22-aa",
+        components: [
+          component({
+            states: [
+              state({ props: { disabled: false, variant: "default" } }),
+              state({ props: { disabled: true, variant: "outline" } }),
+            ],
+            dimensions: [{ name: "variant", values: ["default", "outline"], source: "inferred" }],
+            totalPossibleStates: 2,
+          }),
+        ],
+      }],
+    }), { verbose: false });
 
-    expect(output).toContain("no checks executed (no check provider configured)");
-    expect(output).not.toMatch(/✓ has an accessible name/);
+    expect(output).toContain("Lantern lint");
+    expect(output).toContain("Standard   WCAG 2.2 AA");
+    expect(output).toContain("Provider   unavailable\n           no check provider configured");
+    expect(output).toContain("◌ Button");
+    expect(output).toContain("2 states · exhaustive");
+    expect(output).not.toContain("disabled=false");
+    expect(output).not.toContain("false /");
   });
 
-  it("avoids unnecessary state nesting for a single-state component", () => {
-    const output = renderLintReport(report(), { verbose: false });
+  it("renders singular, exhaustive, and coverage-bounded planning text", () => {
+    const output = renderLintReport(report({
+      standards: [{
+        standard: "wcag22-aa",
+        components: [
+          component({ component: "App", states: [state()], totalPossibleStates: 1 }),
+          component({ states: [state(), state()], totalPossibleStates: 12 }),
+          component({ component: "BigButton", states: [state(), state()], totalPossibleStates: 96, truncated: true }),
+        ],
+      }],
+      summary: { ...report().summary, componentsReview: 3 },
+    }), { verbose: false });
 
-    expect(output).not.toContain("default");
+    expect(output).toContain("◌ App\n  1 state");
+    expect(output).toContain("◌ Button\n  2 states · exhaustive");
+    expect(output).toContain("◌ BigButton\n  96 states planned\n  2 selected · coverage-bounded");
   });
 
-  it("nests multiple states under the component", () => {
-    const multiState = report({
-      standards: [
-        {
-          standard: "wcag22-aa",
-          components: [component({ states: [state({ props: { size: "sm" } }), state({ props: { size: "lg" } })] })],
-        },
-      ],
-    });
+  it("shows dimensions and named selected states in verbose output", () => {
+    const output = renderLintReport(report({
+      standards: [{
+        standard: "wcag22-aa",
+        components: [
+          component({
+            states: [
+              state({ props: { disabled: false, size: "default", variant: "outline" } }),
+              state({ props: { disabled: true, size: "sm", variant: "default" } }),
+            ],
+            dimensions: [
+              { name: "disabled", values: [false, true], source: "inferred" },
+              { name: "size", values: ["default", "sm"], source: "inferred" },
+              { name: "variant", values: ["default", "outline"], source: "inferred" },
+            ],
+            totalPossibleStates: 96,
+            truncated: true,
+          }),
+        ],
+      }],
+    }), { verbose: true });
 
-    const output = renderLintReport(multiState, { verbose: false });
-
-    expect(output).toContain('"sm"');
-    expect(output).toContain('"lg"');
+    expect(output).toContain("Standard   WCAG 2.2 AA (wcag22-aa)");
+    expect(output).toContain("Dimensions");
+    expect(output).toContain("disabled   false | true");
+    expect(output).toContain("variant    default | outline");
+    expect(output).toContain("Showing 2 selected states from 96 theoretical states");
+    expect(output).toContain("Selection: coverage-bounded");
+    expect(output).toContain("#1  disabled=false  size=default  variant=outline");
   });
 
-  it("renders a skipped component with its reason", () => {
-    const skipped = report({
-      standards: [
-        {
-          standard: "wcag22-aa",
-          components: [
-            component({ planStatus: "skipped", status: "skipped", states: [], reason: "Explicitly skipped in configuration." }),
-          ],
-        },
-      ],
-    });
-
-    const output = renderLintReport(skipped, { verbose: false });
-
-    expect(output).toContain("⚠ Button");
-    expect(output).toContain("↷ skipped — Explicitly skipped in configuration.");
-  });
-
-  it("renders an unresolved component with the unresolved reason", () => {
-    const unresolved = report({
-      standards: [
-        {
-          standard: "wcag22-aa",
-          components: [
-            component({
-              component: "Avatar",
-              planStatus: "unresolved",
-              status: "skipped",
-              states: [],
-              unresolvedProps: [{ name: "user", type: "User", reason: "no value" }],
-              reason: 'required prop "user" has no configured or inferred value',
-            }),
-          ],
-        },
-      ],
-    });
-
-    const output = renderLintReport(unresolved, { verbose: false });
-
-    expect(output).toContain('required prop "user" has no configured or inferred value');
-  });
-
-  it("surfaces truncation as a visible, honest note", () => {
-    const truncated = report({
-      standards: [
-        {
-          standard: "wcag22-aa",
-          components: [component({ states: [state(), state()], truncated: true, totalPossibleStates: 12, maxStates: 2 })],
-        },
-      ],
-    });
-
-    const output = renderLintReport(truncated, { verbose: false });
-
-    expect(output).toContain("2/12 states shown (truncated at maxStates=2; not exhaustive)");
-  });
-
-  it("keeps multiple standards as separate visible sections", () => {
-    const multiStandard = report({
-      standards: [
-        { standard: "wcag22-aa", components: [component()] },
-        { standard: "rgaa4.1", components: [component()] },
-      ],
-    });
-
-    const output = renderLintReport(multiStandard, { verbose: false });
-
-    expect(output.indexOf("wcag22-aa")).toBeLessThan(output.indexOf("rgaa4.1"));
-  });
-
-  it("hides provenance and state id outside --verbose", () => {
-    const output = renderLintReport(report(), { verbose: false });
-
-    expect(output).not.toContain("Button.tsx#Button#abc");
-  });
-
-  it("exposes stable state id and prop provenance in --verbose", () => {
-    const verboseReport = report({
-      standards: [
-        {
-          standard: "wcag22-aa",
-          components: [
-            component({
-              states: [state({ props: { disabled: true }, propProvenance: { disabled: "inferred" } })],
-            }),
-          ],
-        },
-      ],
-    });
-
-    const output = renderLintReport(verboseReport, { verbose: true });
-
-    expect(output).toContain("Button.tsx#Button#abc");
-    expect(output).toContain("disabled: true (inferred)");
-  });
-
-  it("prints a truthful notice when no standards are configured", () => {
-    const output = renderLintReport(report({ standards: [] }), { verbose: false });
-
-    expect(output).toContain("No standards are configured");
-  });
-
-  it("renders a deterministic summary line with counts and duration", () => {
-    const output = renderLintReport(report(), { verbose: false });
-
-    expect(output).toContain("Components  0 passed | 0 failed | 1 review | 0 skipped (1)");
-    expect(output).toContain("Duration    1.42s");
-  });
-
-  it("only shows the Checks summary line when at least one check ran", () => {
-    const withChecks = report({
-      summary: {
-        componentsPass: 1,
-        componentsFail: 0,
-        componentsReview: 0,
-        componentsSkipped: 0,
-        checksPass: 3,
-        checksFail: 1,
-        checksReview: 0,
-        durationMs: 10,
+  it("renders since targeting context from structured selection metadata", () => {
+    const output = renderLintReport(report({
+      targeting: {
+        mode: { kind: "since", ref: "HEAD~1" },
+        rescanned: true,
+        selection: { kind: "fallback", reason: "shared source changed: src/lib/utils.ts" },
       },
+    }), { verbose: false });
+
+    expect(output).toContain("Target     changes since HEAD~1");
+    expect(output).toContain("Selection  full component set");
+    expect(output).toContain("Reason     shared source changed: src/lib/utils.ts");
+  });
+
+  it("renders explicit path target context", () => {
+    const output = renderLintReport(report({
+      targeting: {
+        mode: { kind: "path", path: "src/components/ui" },
+        rescanned: true,
+        selection: { kind: "path", path: "src/components/ui", pathKind: "directory", componentCount: 2 },
+      },
+      summary: { ...report().summary, componentsReview: 2 },
+    }), { verbose: false });
+
+    expect(output).toContain("Target     src/components/ui");
+    expect(output).toContain("Selection  2 components");
+    expect(output).not.toContain("Type       directory");
+  });
+
+  it("renders explicit path target type in verbose mode and zero selection", () => {
+    const output = renderLintReport(report({
+      targeting: {
+        mode: { kind: "path", path: "src/lib" },
+        rescanned: true,
+        selection: { kind: "path", path: "src/lib", pathKind: "directory", componentCount: 0 },
+      },
+      standards: [{ standard: "wcag22-aa", components: [] }],
+      summary: { ...report().summary, componentsReview: 0 },
+    }), { verbose: true });
+
+    expect(output).toContain("Target     src/lib");
+    expect(output).toContain("Type       directory");
+    expect(output).toContain("Selection  no components");
+  });
+
+  it("renders no affected components for since no-op selection", () => {
+    const output = renderLintReport(report({
+      targeting: {
+        mode: { kind: "since", ref: "HEAD~1" },
+        rescanned: true,
+        selection: { kind: "none" },
+      },
+      standards: [{ standard: "wcag22-aa", components: [] }],
+      summary: { ...report().summary, componentsReview: 0 },
+    }), { verbose: false });
+
+    expect(output).toContain("Selection  no affected components");
+  });
+
+  it("keeps diagnostics visible", () => {
+    const output = renderLintReport(report({
+      diagnostics: [{ source: "src/Foo.tsx", component: "Foo", message: "Component analysis is incomplete." }],
+    }), { verbose: false });
+
+    expect(output).toContain("Review");
+    expect(output).toContain("! src/Foo.tsx#Foo");
+    expect(output).toContain("Component analysis is incomplete.");
+  });
+
+  it("renders compact deterministic summary", () => {
+    const output = renderLintReport(report(), { verbose: false });
+
+    expect(output).toContain("Summary\n1 component · 0 passed · 0 failed · 1 review · 0 skipped\n1.42s");
+  });
+
+  it("falls back to unknown standard identifiers", () => {
+    const output = renderLintReport(report({ standards: [{ standard: "future-standard", components: [component()] }] }), {
+      verbose: false,
     });
 
-    expect(renderLintReport(report(), { verbose: false })).not.toContain("Checks");
-    expect(renderLintReport(withChecks, { verbose: false })).toContain("Checks      3 passed | 1 failed | 0 review (4)");
+    expect(output).toContain("Standard   future-standard");
   });
 });

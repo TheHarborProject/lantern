@@ -3,8 +3,8 @@ export interface HarnessEntryInput {
   readonly componentImportPath: string;
   /** `"default"` or a named export. */
   readonly exportName: string;
-  /** Props supplied by the audit; serialized verbatim, never invented. */
-  readonly props: Record<string, unknown>;
+  /** @deprecated Props are now supplied at runtime through the harness window boundary. */
+  readonly props?: Record<string, unknown> | undefined;
   /** Optional shared wrapper/provider module (absolute path). */
   readonly wrapperImportPath?: string | undefined;
   /** Export of the wrapper module to use (defaults to `"default"`). */
@@ -22,6 +22,7 @@ export interface HarnessEntryInput {
  * a temporary directory it owns.
  */
 export function generateHarnessEntry(input: HarnessEntryInput): string {
+  const harnessPath = join(dirname(fileURLToPath(import.meta.url)), "templates", "harness.js");
   const componentSpecifier = input.exportName === "default"
     ? `import LanternComponent from ${JSON.stringify(input.componentImportPath)};`
     : `import { ${input.exportName} as LanternComponent } from ${JSON.stringify(input.componentImportPath)};`;
@@ -34,60 +35,16 @@ export function generateHarnessEntry(input: HarnessEntryInput): string {
       : `import { ${wrapperExport} as LanternWrapper } from ${JSON.stringify(input.wrapperImportPath)};`
     : "";
 
-  const wrappedExpression = hasWrapper
-    ? "createElement(LanternWrapper, null, rendered)"
-    : "rendered";
-
   return [
-    `import { Component, createElement, StrictMode, useEffect } from "react";`,
-    `import { createRoot } from "react-dom/client";`,
+    `import { mountLanternHarness } from ${JSON.stringify(harnessPath)};`,
     componentSpecifier,
     wrapperSpecifier,
     ``,
-    `const props = ${JSON.stringify(input.props)};`,
-    ``,
-    `function reportError(error) {`,
-    `  const message = error && error.message ? error.message : String(error);`,
-    `  if (!window.__lanternError__) {`,
-    `    window.__lanternError__ = message;`,
-    `  }`,
-    `}`,
-    ``,
-    `class LanternBoundary extends Component {`,
-    `  componentDidCatch(error) {`,
-    `    reportError(error);`,
-    `  }`,
-    `  render() {`,
-    `    return this.props.children;`,
-    `  }`,
-    `}`,
-    ``,
-    `function LanternReady() {`,
-    `  useEffect(() => {`,
-    `    window.__lanternMounted__ = true;`,
-    `  }, []);`,
-    `  return null;`,
-    `}`,
-    ``,
-    `window.addEventListener("error", (event) => reportError(event.error || event.message));`,
-    ``,
-    `try {`,
-    `  const container = document.getElementById("root");`,
-    `  if (!container) {`,
-    `    reportError("Lantern isolation root '#root' was not found.");`,
-    `  } else {`,
-    `    const rendered = createElement(LanternComponent, props);`,
-    `    const tree = createElement(`,
-    `      StrictMode,`,
-    `      null,`,
-    `      createElement(LanternBoundary, null, ${wrappedExpression}),`,
-    `      createElement(LanternReady),`,
-    `    );`,
-    `    createRoot(container).render(tree);`,
-    `  }`,
-    `} catch (error) {`,
-    `  reportError(error);`,
-    `}`,
+    hasWrapper
+      ? `mountLanternHarness({ component: LanternComponent, wrapper: LanternWrapper });`
+      : `mountLanternHarness({ component: LanternComponent });`,
     ``,
   ].filter((line) => line !== "").join("\n").concat("\n");
 }
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
