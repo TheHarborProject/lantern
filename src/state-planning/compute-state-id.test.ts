@@ -5,7 +5,9 @@ describe("computeStateId", () => {
   it("is stable for the same component and props", () => {
     const props = { variant: "destructive", size: "sm", disabled: true };
 
-    expect(computeStateId("Button.tsx#Button", props)).toBe(computeStateId("Button.tsx#Button", props));
+    expect(computeStateId("Button.tsx#Button", props)).toBe(
+      computeStateId("Button.tsx#Button", props),
+    );
   });
 
   it("is independent of prop key order", () => {
@@ -30,6 +32,6 @@ describe("computeStateId", () => {
   });
 
   it("is prefixed with the component id for readability", () => {
-    expect(computeStateId("Button.tsx#Button", {})).toMatch(/^Button\.tsx#Button#[0-9a-f]{10}$/);
+    expect(computeStateId("Button.tsx#Button", {})).toBe("Button.tsx#Button#0e815dbc91");
   });
 });

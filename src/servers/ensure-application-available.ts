@@ -10,7 +10,7 @@ const POLL_INTERVAL_MS = 250;
 export interface EnsureApplicationAvailableOptions {
   readonly baseUrl: string;
   readonly autoStart: boolean;
-  readonly startCommand: string | undefined;
+  readonly startScript: string | undefined;
   readonly workingDirectory: string;
   /** Maximum wait time for availability after startup. Default: 30 s. */
   readonly startupTimeoutMs?: number;
@@ -19,7 +19,7 @@ export interface EnsureApplicationAvailableOptions {
 /**
  * Ensure the application is reachable before executing `action` (RFC-011):
  * if `baseUrl` already responds, reuse that server as-is and never touch it.
- * Otherwise, when `autoStart` is enabled, launch `startCommand` from
+ * Otherwise, when `autoStart` is enabled, launch `startScript` from
  * `workingDirectory`, wait for readiness, execute `action`, then stop only
  * the process created by this call, always from a `finally` block. An
  * external server that was already running is never stopped:
@@ -28,7 +28,7 @@ export interface EnsureApplicationAvailableOptions {
  * @throws {ApplicationUnreachableError} `baseUrl` does not respond and
  *   `autoStart` is disabled, or the readiness timeout expires after startup.
  * @throws {ApplicationStartFailedError} `autoStart` is enabled without
- *   `startCommand`, or the launched process exits before becoming reachable.
+ *   `startScript`, or the launched process exits before becoming reachable.
  */
 export async function ensureApplicationAvailable<T>(
   options: EnsureApplicationAvailableOptions,
@@ -42,15 +42,15 @@ export async function ensureApplicationAvailable<T>(
     throw new ApplicationUnreachableError(options.baseUrl);
   }
 
-  if (options.startCommand === undefined) {
-    throw new ApplicationStartFailedError("(no startCommand configured)");
+  if (options.startScript === undefined) {
+    throw new ApplicationStartFailedError("(no startScript configured)");
   }
 
-  const app = spawnApplication(options.startCommand, options.workingDirectory);
+  const app = spawnApplication(options.startScript, options.workingDirectory);
   const uninstallSignalHandlers = installShutdownSignalHandlers(app);
 
   try {
-    await waitUntilReady(app, options.startCommand, options.baseUrl, options.startupTimeoutMs);
+    await waitUntilReady(app, options.startScript, options.baseUrl, options.startupTimeoutMs);
     return await action();
   } finally {
     uninstallSignalHandlers();
@@ -60,7 +60,7 @@ export async function ensureApplicationAvailable<T>(
 
 async function waitUntilReady(
   app: RunningApplication,
-  startCommand: string,
+  startScript: string,
   baseUrl: string,
   startupTimeoutMs: number | undefined,
 ): Promise<void> {
@@ -68,7 +68,7 @@ async function waitUntilReady(
 
   while (Date.now() < deadline) {
     if (app.hasExited()) {
-      throw new ApplicationStartFailedError(startCommand, {
+      throw new ApplicationStartFailedError(startScript, {
         cause: new Error(
           `Exit code ${String(app.exitCode())}${app.capturedOutput() !== "" ? `: ${app.capturedOutput()}` : ""}`,
         ),

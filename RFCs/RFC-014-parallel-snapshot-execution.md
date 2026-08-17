@@ -434,7 +434,7 @@ Concurrency should begin only when independent work is ready.
 If SnapRun starts the target project through:
 
 ```text
-project.startCommand
+project.startScript
 ```
 
 the project must be fully started before concurrent route work begins.

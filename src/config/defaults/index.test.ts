@@ -18,7 +18,7 @@ describe("createDefaultConfig", () => {
     const { project } = createDefaultConfig();
 
     expect(Object.keys(project).sort()).toEqual(
-      ["autoStart", "baseUrl", "root", "startCommand", "workingDirectory"].sort(),
+      ["autoStart", "baseUrl", "root", "startScript", "workingDirectory"].sort(),
     );
   });
 
@@ -49,7 +49,13 @@ describe("createDefaultConfig", () => {
 
     expect(config.standards).toEqual(["wcag22-aa"]);
     expect(config.extends).toEqual(["lantern:recommended"]);
-    expect(config.ignorePatterns).toEqual(["node_modules/", "dist/", "build/", ".next/", "coverage/"]);
+    expect(config.ignorePatterns).toEqual([
+      "node_modules/",
+      "dist/",
+      "build/",
+      ".next/",
+      "coverage/",
+    ]);
     // Fields the resolution layer already defaults usefully stay absent from the
     // scaffolded file, so it does not repeat values that simply match defaults.
     expect(config.engines).toBeUndefined();

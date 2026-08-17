@@ -9,7 +9,7 @@ const POLL_INTERVAL_MS = 20;
  * created by {@link spawnApplication}. Send `SIGTERM` first for graceful
  * shutdown, then `SIGKILL` after a short grace period if the process is
  * still running. On POSIX, target the process group (`-pid`) to avoid
- * orphaned processes created by shell commands.
+ * orphaned processes created by package scripts.
  *
  * On POSIX, waiting covers the whole group (`kill(-pid, 0)`), not only the
  * directly tracked process. An indirect child in the same group may receive

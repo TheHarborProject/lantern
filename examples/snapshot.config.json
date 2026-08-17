@@ -2,7 +2,7 @@
   "project": {
     "root": ".",
     "baseUrl": "http://localhost:3000",
-    "startCommand": "pnpm dev",
+    "startScript": "dev",
     "autoStart": true
   },
   "output": {

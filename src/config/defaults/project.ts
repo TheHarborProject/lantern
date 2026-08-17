@@ -9,6 +9,6 @@ export const defaultProjectConfig: ProjectConfig = {
   root: ".",
   workingDirectory: ".",
   baseUrl: "http://localhost:3000",
-  startCommand: "pnpm dev",
+  startScript: "dev",
   autoStart: true,
 };
