@@ -466,7 +466,7 @@ describe("buildLintReport", () => {
     writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
     const types: string[] = [];
     const report = await buildLintReport({ config: resolvedConfig(root, { rules: { "lantern/accessible-name": "error" } }), mode: { kind: "incremental" }, events: (event) => { types.push(event.type); } });
-    expect(types).toEqual(["run-started", "component-started", "state-started", "check-started", "check-completed", "state-completed", "component-completed", "run-completed"]);
+    expect(types).toEqual(["run-started", "run-planned", "component-started", "state-started", "check-started", "check-completed", "state-completed", "component-completed", "run-completed"]);
     expect(report.status).toBe("completed");
 
     const controller = new AbortController();
