@@ -22,7 +22,7 @@ export function resolveProject(request: ProjectRequest = {}): ResolvedConfig {
 
 export function discoverComponents(request: ProjectRequest = {}): CanonicalComponentModel {
   const config = resolveProject(request);
-  return resolveLintTargets({ root: config.project.root, cwd: request.cwd, ignorePatterns: config.ignorePatterns, mode: { kind: "incremental" } }).model;
+  return resolveLintTargets({ root: config.project.root, sourceDirectory: config.project.sourceDirectory, cwd: request.cwd, ignorePatterns: config.ignorePatterns, mode: { kind: "incremental" } }).model;
 }
 
 export async function runAudit(request: AuditRequest = {}): Promise<{ readonly report: LintReport; readonly wire: AuditWireDto }> {

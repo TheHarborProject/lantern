@@ -4,7 +4,7 @@ import { configSchema } from "./config.js";
 describe("configSchema", () => {
   it("applies safe project defaults", () => {
     expect(configSchema.parse({ project: {} })).toEqual({
-      project: { root: ".", workingDirectory: ".", autoStart: false },
+      project: { root: ".", workingDirectory: ".", sourceDirectory: ".", autoStart: false },
     });
   });
 
