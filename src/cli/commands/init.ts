@@ -95,6 +95,18 @@ export function createInquirerInitPrompter(): InitPrompter {
         default: defaultStandard,
       });
     },
+    async selectOutputMode(defaultMode): Promise<"minimal" | "compact" | "verbose" | undefined> {
+      assertInteractiveTerminal();
+      return select({
+        message: "Which lint output mode do you prefer?",
+        choices: [
+          { name: "Minimal", value: "minimal" as const },
+          { name: "Compact (recommended)", value: "compact" as const },
+          { name: "Verbose", value: "verbose" as const },
+        ],
+        default: defaultMode,
+      });
+    },
     async confirmIgnorePatterns(): Promise<boolean | undefined> {
       assertInteractiveTerminal();
       return confirm({ message: "Add ignore patterns?", default: false });

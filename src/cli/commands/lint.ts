@@ -6,6 +6,7 @@ import { computeExitCode } from "../../lint/compute-exit-code.js";
 import { renderLintReport } from "../../lint/render-lint-report.js";
 import { runConfigureWorkflow } from "../../lint/run-configure-workflow.js";
 import type { LintReport, LintTargetMode } from "../../lint/types.js";
+import type { OutputMode } from "../../schemas/output.js";
 import { loadConfig } from "../../config/load-config.js";
 import { LanternError } from "../../errors/lantern-error.js";
 import { LintConfigureError } from "../../errors/lint-configure-error.js";
@@ -13,11 +14,14 @@ import { LintTargetingError } from "../../errors/lint-targeting-error.js";
 import type { GlobalCliOptions } from "../global-cli-options.js";
 import { printCliError } from "../print-cli-error.js";
 import { createReadlineConfigurePrompter } from "../readline-configure-prompter.js";
+import { shouldUseColor } from "../terminal-style.js";
 
 interface LintCommandOptions {
   readonly all?: boolean;
   readonly since?: string;
   readonly verbose?: boolean;
+  readonly minimal?: boolean;
+  readonly compact?: boolean;
   readonly configure?: boolean;
   readonly failOnSkipped?: boolean;
 }
@@ -30,7 +34,9 @@ export function registerLintCommand(program: Command): void {
     .description("Run Lantern's accessibility lint workflow across discovered components.")
     .option("--all", "Process every discovered component, forcing a full rescan")
     .option("--since <ref>", "Target components changed since the given Git ref")
-    .option("--verbose", "Show additional provenance (state id, rule config, evidence)")
+    .option("--verbose", "Show actionable diagnostics, state props, provenance, and evidence")
+    .option("--minimal", "Show only the final summary")
+    .option("--compact", "Show scannable per-component output (default)")
     .option("--configure", "Interactively resolve unresolved component props")
     .option("--fail-on-skipped", "Exit 1 when any component is skipped or unresolved")
     .addHelpText(
@@ -51,6 +57,7 @@ Examples:
       try {
         const mode = resolveTargetMode(options, targetPath);
         const config = loadConfig({ cwd: process.cwd(), explicitPath: globalOptions.config });
+        const outputMode = resolveOutputMode(options, config.output.mode);
         const report = await buildLintReport({ config, mode, cwd: process.cwd() });
 
         if (report.status === "failed" || report.status === "cancelled") {
@@ -66,7 +73,10 @@ Examples:
           return;
         }
 
-        console.log(renderLintReport(report, { verbose: options.verbose === true }));
+        console.log(renderLintReport(report, {
+          mode: outputMode,
+          color: shouldUseColor(process.stdout.isTTY === true),
+        }));
         process.exitCode = computeExitCode(report, { failOnSkipped: options.failOnSkipped === true });
       } catch (error) {
         if (error instanceof LanternError) {
@@ -77,6 +87,12 @@ Examples:
         throw error;
       }
     });
+}
+
+export function resolveOutputMode(options: Pick<LintCommandOptions, "minimal" | "compact" | "verbose">, configuredMode: OutputMode = "compact"): OutputMode {
+  const selected = [options.minimal === true ? "minimal" : undefined, options.compact === true ? "compact" : undefined, options.verbose === true ? "verbose" : undefined].filter((mode): mode is OutputMode => mode !== undefined);
+  if (selected.length > 1) throw new LintTargetingError('"--minimal", "--compact", and "--verbose" are mutually exclusive.');
+  return selected[0] ?? configuredMode;
 }
 
 function resolveTargetMode(options: LintCommandOptions, targetPath: string | undefined): LintTargetMode {

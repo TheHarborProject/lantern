@@ -8,6 +8,7 @@ import type { OverridesConfig } from "../schemas/overrides.js";
 import type { RulesConfig } from "../schemas/rules.js";
 import type { SettingsConfig } from "../schemas/settings.js";
 import type { StandardsConfig } from "../schemas/standards.js";
+import type { OutputConfig } from "../schemas/output.js";
 
 /**
  * Raw configuration: direct result of Zod validation.
@@ -29,6 +30,7 @@ export type RawConfig = z.infer<typeof configSchema>;
  * resolution can apply matching overrides deterministically at lint time.
  */
 export interface ResolvedLanternConfig {
+  readonly output: OutputConfig;
   readonly standards: StandardsConfig;
   readonly extends: ExtendsConfig;
   readonly engines: EngineConfig;
