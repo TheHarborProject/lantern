@@ -1,6 +1,6 @@
 # RFC-011 — Démarrage automatique de l’application
 
-Tester `baseUrl`. Si elle répond, réutiliser le serveur. Sinon, si `autoStart`, lancer `startCommand` depuis `workingDirectory`, attendre disponibilité, exécuter, puis arrêter uniquement le processus créé par SnapRun.
+Tester `baseUrl`. Si elle répond, réutiliser le serveur. Sinon, si `autoStart`, lancer le script `package.json` nommé par `startScript` depuis `workingDirectory`, attendre disponibilité, exécuter, puis arrêter uniquement le processus créé par SnapRun. Le gestionnaire déclaré par `packageManager` ou détecté par lockfile est exécuté directement avec un tableau d'arguments, sans shell Lantern.
 
 Ne jamais arrêter un serveur externe. Gérer stdout/stderr, timeout, signaux et processus orphelins.
 

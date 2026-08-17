@@ -13,7 +13,7 @@ Ordre : `snaprun.config.json`, `snapshot.config.json`, `settings.json`. `--confi
     "root": ".",
     "workingDirectory": ".",
     "baseUrl": "http://localhost:3000",
-    "startCommand": "pnpm dev",
+    "startScript": "dev",
     "autoStart": true
   },
   "output": { "directory": "./snapshots", "fullPage": true },

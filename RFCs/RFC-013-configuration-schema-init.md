@@ -400,7 +400,7 @@ Existing/common project values currently include equivalents of:
     "root": ".",
     "workingDirectory": ".",
     "baseUrl": "http://127.0.0.1:3000",
-    "startCommand": "pnpm dev",
+    "startScript": "dev",
     "autoStart": true
   }
 }
