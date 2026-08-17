@@ -87,6 +87,8 @@ export interface StateReport {
   /** `"review"` whenever `checks` is empty: nothing was actually verified. */
   readonly status: ReportStatus;
   readonly outcomeReason?: OutcomeReason | undefined;
+  /** Producer-authored explanation of an aggregate state outcome. */
+  readonly reason?: string | undefined;
 }
 
 export interface StateDimensionReport {
