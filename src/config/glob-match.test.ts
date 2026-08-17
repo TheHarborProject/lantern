@@ -13,9 +13,9 @@ describe("matchesGlob", () => {
 
   it("matches ** across path segments", () => {
     expect(matchesGlob("src/components/internal/Foo.tsx", "src/components/internal/**")).toBe(true);
-    expect(matchesGlob("src/components/internal/nested/Foo.tsx", "src/components/internal/**")).toBe(
-      true,
-    );
+    expect(
+      matchesGlob("src/components/internal/nested/Foo.tsx", "src/components/internal/**"),
+    ).toBe(true);
   });
 
   it("matches * within a single path segment only", () => {
@@ -35,6 +35,18 @@ describe("matchesGlob", () => {
 
   it("does not match on a partial segment prefix", () => {
     expect(matchesGlob("foobar/index.ts", "foo/")).toBe(false);
+  });
+
+  it("treats regular-expression metacharacters as glob literals", () => {
+    expect(matchesGlob("src/[draft](v1)+file$.ts", "src/[draft](v1)+file$.ts")).toBe(true);
+    expect(matchesGlob("src/draftv11file.ts", "src/[draft](v1)+file$.ts")).toBe(false);
+  });
+
+  it("handles adversarial overlapping wildcards with bounded work", () => {
+    const pattern = `${"**a".repeat(2_000)}z`;
+    const path = `${"a".repeat(2_000)}y`;
+
+    expect(matchesGlob(path, pattern)).toBe(false);
   });
 
   it("matchesAnyGlob matches when any pattern matches", () => {
