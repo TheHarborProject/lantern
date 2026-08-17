@@ -15,7 +15,7 @@ function validProject(overrides: ProjectOverrides = {}): Record<string, unknown>
   return {
     root: ".",
     baseUrl: "http://localhost:3000",
-    startCommand: "pnpm dev",
+    startScript: "dev",
     autoStart: true,
     ...overrides,
   };
@@ -170,7 +170,7 @@ describe("loadConfig", () => {
     expect(result.project.workingDirectory).toBe(dir);
     expect(result.project.autoStart).toBe(false);
     expect(result.project.baseUrl).toBeUndefined();
-    expect(result.project.startCommand).toBeUndefined();
+    expect(result.project.startScript).toBeUndefined();
     expect(result.auth).toBeUndefined();
   });
 

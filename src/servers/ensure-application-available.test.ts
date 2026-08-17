@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createServer, type Server } from "node:http";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -58,7 +58,7 @@ describe("ensureApplicationAvailable", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("réutilise un serveur déjà en place sans jamais lancer startCommand (serveur existant)", async () => {
+  it("réutilise un serveur déjà en place sans jamais lancer startScript (serveur existant)", async () => {
     const server: Server = createServer((_req, res) => {
       res.writeHead(200);
       res.end("ok");
@@ -77,7 +77,7 @@ describe("ensureApplicationAvailable", () => {
       {
         baseUrl,
         autoStart: true,
-        startCommand: `node -e "require('fs').writeFileSync('${markerFile}', 'ran')"`,
+        startScript: `node -e "require('fs').writeFileSync('${markerFile}', 'ran')"`,
         workingDirectory: dir,
       },
       () => Promise.resolve("action-result"),
@@ -98,7 +98,7 @@ describe("ensureApplicationAvailable", () => {
         {
           baseUrl: "http://127.0.0.1:1",
           autoStart: false,
-          startCommand: undefined,
+          startScript: undefined,
           workingDirectory: dir,
         },
         () => Promise.resolve(undefined),
@@ -106,19 +106,26 @@ describe("ensureApplicationAvailable", () => {
     ).rejects.toBeInstanceOf(ApplicationUnreachableError);
   });
 
-  it("lance startCommand, attend la disponibilité, exécute l'action, puis arrête le processus créé (autostart)", async () => {
+  it("lance startScript, attend la disponibilité, exécute l'action, puis arrête le processus créé (autostart)", async () => {
     const port = await getFreePort();
     const baseUrl = `http://127.0.0.1:${port}`;
-    const startCommand = [
+    const script = [
       'node -e "',
       "setTimeout(() => {",
       `  require('http').createServer((req, res) => { res.end('ok'); }).listen(${port});`,
       "}, 300);",
       'setInterval(() => {}, 1000);"',
     ].join(" ");
+    writePackageScripts(dir, { serve: script });
 
     const result = await ensureApplicationAvailable(
-      { baseUrl, autoStart: true, startCommand, workingDirectory: dir, startupTimeoutMs: 5000 },
+      {
+        baseUrl,
+        autoStart: true,
+        startScript: "serve",
+        workingDirectory: dir,
+        startupTimeoutMs: 5000,
+      },
       () => Promise.resolve("captured"),
     );
 
@@ -129,12 +136,13 @@ describe("ensureApplicationAvailable", () => {
   });
 
   it("lève APPLICATION_START_FAILED si la commande échoue avant de devenir joignable", async () => {
+    writePackageScripts(dir, { failure: "node -e \"console.error('boom'); process.exit(1)\"" });
     await expect(
       ensureApplicationAvailable(
         {
           baseUrl: "http://127.0.0.1:1",
           autoStart: true,
-          startCommand: "node -e \"console.error('boom'); process.exit(1)\"",
+          startScript: "failure",
           workingDirectory: dir,
           startupTimeoutMs: 5000,
         },
@@ -145,14 +153,16 @@ describe("ensureApplicationAvailable", () => {
 
   it("lève APPLICATION_UNREACHABLE en cas de dépassement du délai, et arrête tout de même le processus", async () => {
     const pidFile = join(dir, "pid.txt");
-    const startCommand = `node -e "require('fs').writeFileSync('${pidFile}', String(process.pid)); setInterval(() => {}, 1000);"`;
+    writePackageScripts(dir, {
+      hanging: `node -e "require('fs').writeFileSync('${pidFile}', String(process.pid)); setInterval(() => {}, 1000);"`,
+    });
 
     await expect(
       ensureApplicationAvailable(
         {
           baseUrl: "http://127.0.0.1:1",
           autoStart: true,
-          startCommand,
+          startScript: "hanging",
           workingDirectory: dir,
           startupTimeoutMs: 500,
         },
@@ -164,13 +174,13 @@ describe("ensureApplicationAvailable", () => {
     expect(isProcessAlive(pid)).toBe(false);
   });
 
-  it("lève APPLICATION_START_FAILED si autoStart est activé sans startCommand configurée", async () => {
+  it("lève APPLICATION_START_FAILED si autoStart est activé sans startScript configurée", async () => {
     await expect(
       ensureApplicationAvailable(
         {
           baseUrl: "http://127.0.0.1:1",
           autoStart: true,
-          startCommand: undefined,
+          startScript: undefined,
           workingDirectory: dir,
         },
         () => Promise.resolve(undefined),
@@ -210,14 +220,14 @@ describe("ensureApplicationAvailable", () => {
           {
             baseUrl,
             autoStart: true,
-            startCommand: `node -e "require('fs').writeFileSync('${markerFile}', 'ran')"`,
+            startScript: `node -e "require('fs').writeFileSync('${markerFile}', 'ran')"`,
             workingDirectory: dir,
           },
           () => Promise.resolve("action-result"),
         );
 
         expect(result).toBe("action-result");
-        // startCommand jamais lancé.
+        // startScript jamais lancé.
         expect(existsSync(markerFile)).toBe(false);
         // stopApplication n'est jamais invoquée pour un serveur déjà joignable.
         expect(stopSpy).not.toHaveBeenCalled();
@@ -234,18 +244,25 @@ describe("ensureApplicationAvailable", () => {
     it("arrête le processus créé même si l'action échoue immédiatement après le démarrage", async () => {
       const port = await getFreePort();
       const baseUrl = `http://127.0.0.1:${port}`;
-      const startCommand = [
+      const script = [
         'node -e "',
         "setTimeout(() => {",
         `  require('http').createServer((req, res) => { res.end('ok'); }).listen(${port});`,
         "}, 300);",
         'setInterval(() => {}, 1000);"',
       ].join(" ");
+      writePackageScripts(dir, { serve: script });
       const actionError = new Error("captureSnapshots a échoué immédiatement");
 
       await expect(
         ensureApplicationAvailable(
-          { baseUrl, autoStart: true, startCommand, workingDirectory: dir, startupTimeoutMs: 5000 },
+          {
+            baseUrl,
+            autoStart: true,
+            startScript: "serve",
+            workingDirectory: dir,
+            startupTimeoutMs: 5000,
+          },
           () => Promise.reject(actionError),
         ),
       ).rejects.toBe(actionError);
@@ -263,7 +280,7 @@ describe("ensureApplicationAvailable", () => {
         `require('fs').writeFileSync('${pidFile}', JSON.stringify({ self: process.pid, grandchild: grandchild.pid }));`,
         "setInterval(() => {}, 1000);",
       ].join(" ");
-      const startCommand = `node -e "${script}"`;
+      writePackageScripts(dir, { children: `node -e "${script}"` });
 
       let caught: unknown;
       try {
@@ -271,7 +288,7 @@ describe("ensureApplicationAvailable", () => {
           {
             baseUrl: "http://127.0.0.1:1",
             autoStart: true,
-            startCommand,
+            startScript: "children",
             workingDirectory: dir,
             startupTimeoutMs: 500,
           },
@@ -295,3 +312,10 @@ describe("ensureApplicationAvailable", () => {
     });
   });
 });
+
+function writePackageScripts(directory: string, scripts: Readonly<Record<string, string>>): void {
+  writeFileSync(
+    join(directory, "package.json"),
+    JSON.stringify({ private: true, packageManager: "npm@10.0.0", scripts }),
+  );
+}

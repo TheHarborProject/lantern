@@ -12,6 +12,14 @@ describe("configSchema", () => {
     expect(configSchema.safeParse({}).success).toBe(false);
   });
 
+  it("rejects legacy startCommand instead of silently discarding it", () => {
+    expect(configSchema.safeParse({ project: { startCommand: "pnpm dev" } }).success).toBe(false);
+  });
+
+  it("rejects an empty startScript", () => {
+    expect(configSchema.safeParse({ project: { startScript: "   " } }).success).toBe(false);
+  });
+
   it("accepts optional form authentication", () => {
     const result = configSchema.safeParse({
       project: {},
