@@ -90,6 +90,7 @@ const wireStateSchema = z.object({
   checks: z.array(wireCheckSchema),
   status: z.enum(["pass", "fail", "review", "skipped"]),
   outcomeReason: wireOutcomeReasonSchema.optional(),
+  reason: z.string().optional(),
 });
 export type AuditWireState = z.infer<typeof wireStateSchema>;
 
