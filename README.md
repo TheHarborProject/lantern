@@ -33,10 +33,23 @@ Lantern recognizes `lantern.config.json` and `.lantern.json`. The foundation sch
     "root": ".",
     "workingDirectory": ".",
     "baseUrl": "http://localhost:3000",
+    "startScript": "dev",
     "autoStart": false
   }
 }
 ```
+
+When `autoStart` is enabled and `baseUrl` is not already reachable, Lantern
+runs `startScript` as a `package.json` script from `workingDirectory`. It uses
+the nearest supported `packageManager` declaration (`npm`, `pnpm`, `yarn`, or
+`bun`), then a recognized lockfile, and otherwise falls back to npm. Script
+names are passed as a single process argument, so custom script names remain
+available without accepting arbitrary shell commands in Lantern configuration.
+
+The script itself is project code and may execute shell commands through the
+package manager. Only run Lantern against projects you trust; `startScript`
+removes Lantern's command-string injection surface, not the trust required to
+execute a repository's scripts.
 
 ## Component Discovery
 

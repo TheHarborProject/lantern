@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawnApplication } from "./spawn-application.js";
 import { stopApplication } from "./stop-application.js";
 
@@ -31,7 +34,8 @@ function isProcessAlive(pid: number): boolean {
 
 describe("stopApplication", () => {
   it("arrête un processus en cours d'exécution (le processus créé par Lantern)", async () => {
-    const app = spawnApplication('node -e "setInterval(() => {}, 1000)"', process.cwd());
+    const directory = fixtureProject({ long: 'node -e "setInterval(() => {}, 1000)"' });
+    const app = spawnApplication("long", directory);
     const pid = app.pid;
     expect(pid).toBeDefined();
     if (pid === undefined) {
@@ -44,13 +48,16 @@ describe("stopApplication", () => {
 
     expect(app.hasExited()).toBe(true);
     expect(isProcessAlive(pid)).toBe(false);
+    rmSync(directory, { recursive: true, force: true });
   });
 
   it("ne fait rien (pas d'erreur) si le processus a déjà quitté de lui-même", async () => {
-    const app = spawnApplication('node -e "process.exit(0)"', process.cwd());
+    const directory = fixtureProject({ exit: 'node -e "process.exit(0)"' });
+    const app = spawnApplication("exit", directory);
     await waitFor(() => app.hasExited());
 
     await expect(stopApplication(app)).resolves.toBeUndefined();
+    rmSync(directory, { recursive: true, force: true });
   });
 
   it("n'oublie aucun processus enfant (groupe de processus) : la commande et ses propres enfants sont arrêtés", async () => {
@@ -64,7 +71,9 @@ describe("stopApplication", () => {
       "setInterval(() => {}, 1000);",
     ].join(" ");
 
-    const app = spawnApplication(`node -e "${script}"`, process.cwd());
+    const directory = fixtureProject({ children: "node children.cjs" });
+    writeFileSync(join(directory, "children.cjs"), script);
+    const app = spawnApplication("children", directory);
 
     await waitFor(() => app.capturedOutput().includes("GRANDCHILD_PID="));
     const match = /GRANDCHILD_PID=(\d+)/.exec(app.capturedOutput());
@@ -79,5 +88,15 @@ describe("stopApplication", () => {
     await stopApplication(app);
 
     expect(isProcessAlive(grandchildPid)).toBe(false);
+    rmSync(directory, { recursive: true, force: true });
   });
 });
+
+function fixtureProject(scripts: Readonly<Record<string, string>>): string {
+  const directory = mkdtempSync(join(tmpdir(), "lantern-stop-app-"));
+  writeFileSync(
+    join(directory, "package.json"),
+    JSON.stringify({ private: true, packageManager: "npm@10.0.0", scripts }),
+  );
+  return directory;
+}

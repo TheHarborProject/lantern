@@ -22,7 +22,9 @@ describe("hashSourceFiles", () => {
     const hashes = hashSourceFiles(root, [join(root, "src", "Button.tsx")]);
 
     expect(Object.keys(hashes)).toEqual(["src/Button.tsx"]);
-    expect(hashes["src/Button.tsx"]).toMatch(/^[0-9a-f]{40}$/);
+    expect(hashes["src/Button.tsx"]).toBe(
+      "ee213c4e256f360b460a8d7d25d7cadd69ad4bc48e41145b788326dae07930ed",
+    );
   });
 
   it("is deterministic for the same content", () => {

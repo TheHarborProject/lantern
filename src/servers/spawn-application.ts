@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { resolvePackageManager, type PackageManager } from "./resolve-package-manager.js";
 
 /** Application launched by Lantern, with exit state and captured output. */
 export interface RunningApplication {
@@ -10,26 +11,24 @@ export interface RunningApplication {
 }
 
 /**
- * Launch `startCommand` from `workingDirectory` (RFC-011). On POSIX,
+ * Launch the package.json `startScript` from `workingDirectory` (RFC-011).
+ * The package manager is executed directly with an argv array: Lantern never
+ * interprets the script name as shell syntax. On POSIX,
  * `detached: true` puts the process in its own group so
  * {@link stopApplication} can stop the command and any child processes
- * without leaving orphans. On POSIX the command is prefixed with the shell
- * keyword `exec`: without it, `sh -c "<command>"` keeps an intermediate shell
- * that often moves its own command into a new process group (job control),
- * making that group unreachable to `stopApplication` (observed bug: the
- * shell stops, not the command it launched). `exec` replaces the shell with
- * the command itself. stdout/stderr are captured and never printed directly,
+ * without leaving orphans. stdout/stderr are captured and never printed directly,
  * which avoids noise while the application starts normally.
  */
 export function spawnApplication(
-  startCommand: string,
+  startScript: string,
   workingDirectory: string,
 ): RunningApplication {
-  const command = process.platform === "win32" ? startCommand : `exec ${startCommand}`;
+  const packageManager = resolvePackageManager(workingDirectory);
+  const command = packageManagerExecutable(packageManager);
 
-  const child = spawn(command, {
+  const child = spawn(command, ["run", startScript], {
     cwd: workingDirectory,
-    shell: true,
+    shell: false,
     detached: process.platform !== "win32",
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -44,9 +43,13 @@ export function spawnApplication(
   child.stderr?.on("data", (chunk: Buffer) => {
     output += chunk.toString();
   });
-  child.on("exit", (exitCode) => {
-    exited = true;
+  // `close` runs after stdio has closed, so startup errors include all output
+  // instead of racing the final stdout/stderr chunks.
+  child.on("close", (exitCode) => {
     code = exitCode;
+    setImmediate(() => {
+      exited = true;
+    });
   });
   child.on("error", () => {
     exited = true;
@@ -58,4 +61,11 @@ export function spawnApplication(
     exitCode: () => code,
     capturedOutput: () => output,
   };
+}
+
+function packageManagerExecutable(packageManager: PackageManager): string {
+  if (process.platform !== "win32" || packageManager === "bun") {
+    return packageManager;
+  }
+  return `${packageManager}.cmd`;
 }
