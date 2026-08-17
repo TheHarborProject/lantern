@@ -127,6 +127,12 @@ async function buildSuccessfulLintReport(options: BuildLintReportOptions, runId:
   const accessibilityById = indexAccessibility(targets.model);
   const requestedIds = validateSelection(options, targets.model);
   const includedComponents = filterComponents(targets.model, requestedIds ?? targets.targetComponentIds);
+  await options.events?.({
+    type: "run-planned",
+    runId,
+    timestamp: new Date().toISOString(),
+    totalComponents: includedComponents.length,
+  });
   const configResolution = resolveComponentConfigs(includedComponents, config);
 
   const engines = createEnabledEngines(config.engines);
@@ -145,7 +151,14 @@ async function buildSuccessfulLintReport(options: BuildLintReportOptions, runId:
     // ordering must never depend on browser/engine completion order.
     for (const component of includedComponents) {
       throwIfCancelled(options.signal);
-      await options.events?.({ type: "component-started", runId, timestamp: new Date().toISOString(), componentId: component.id });
+      await options.events?.({
+        type: "component-started",
+        runId,
+        timestamp: new Date().toISOString(),
+        componentId: component.id,
+        source: component.source,
+        component: component.name,
+      });
       const report = await buildComponentReport(
         component,
         accessibilityById,
