@@ -15,6 +15,7 @@ import type { GlobalCliOptions } from "../global-cli-options.js";
 import { printCliError } from "../print-cli-error.js";
 import { createReadlineConfigurePrompter } from "../readline-configure-prompter.js";
 import { shouldUseColor } from "../terminal-style.js";
+import { createLintProgress, shouldRenderLintProgress } from "../lint-progress.js";
 
 interface LintCommandOptions {
   readonly all?: boolean;
@@ -58,7 +59,26 @@ Examples:
         const mode = resolveTargetMode(options, targetPath);
         const config = loadConfig({ cwd: process.cwd(), explicitPath: globalOptions.config });
         const outputMode = resolveOutputMode(options, config.output.mode);
-        const report = await buildLintReport({ config, mode, cwd: process.cwd() });
+        const color = shouldUseColor(process.stdout.isTTY === true);
+        const progress = shouldRenderLintProgress(outputMode, process.stdout.isTTY === true)
+          ? createLintProgress({ writer: process.stdout, standards: config.standards, color })
+          : undefined;
+        const cancellation = new AbortController();
+        const cancel = (): void => cancellation.abort();
+        process.once("SIGINT", cancel);
+        let report: LintReport;
+        try {
+          report = await buildLintReport({
+            config,
+            mode,
+            cwd: process.cwd(),
+            signal: cancellation.signal,
+            events: progress?.events,
+          });
+        } finally {
+          process.removeListener("SIGINT", cancel);
+          progress?.close();
+        }
 
         if (report.status === "failed" || report.status === "cancelled") {
           for (const diagnostic of report.diagnostics ?? []) {
@@ -75,7 +95,7 @@ Examples:
 
         console.log(renderLintReport(report, {
           mode: outputMode,
-          color: shouldUseColor(process.stdout.isTTY === true),
+          color,
         }));
         process.exitCode = computeExitCode(report, { failOnSkipped: options.failOnSkipped === true });
       } catch (error) {
