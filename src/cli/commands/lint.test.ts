@@ -176,6 +176,22 @@ describe("lantern lint", () => {
     expect(error).toHaveBeenCalledWith(expect.stringContaining("Target path does not exist: src/nope"));
   });
 
+  it("prints the stack trace for a targeting error under --debug (RFC-009.1: typed errors keep their original CLI path)", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const program = createProgram();
+    program.exitOverride();
+
+    await program.parseAsync(["lint", "src/nope", "--debug"], { from: "user" });
+
+    expect(process.exitCode).toBe(2);
+    const messages = error.mock.calls.map((call) => String(call[0]));
+    expect(messages[0]).toContain("Target path does not exist: src/nope");
+    // `printCliError` only prints the stack under `--debug`; this is the same
+    // typed-error CLI path used before RFC-009, not the generic
+    // `status: "failed"` report path used for genuine operational failures.
+    expect(messages.some((message) => message.includes("LintTargetingError"))).toBe(true);
+  });
+
   it("exits 2 with an actionable error for --since outside a Git repository", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const program = createProgram();

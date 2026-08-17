@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CheckResult } from "../lint/types.js";
+import { AuditCancelledError } from "../lint/events.js";
 import type { AccessibilityComponent } from "../types/component-scan.js";
 import { executePlannedChecks } from "./execute-checks.js";
 import type { Engine, PlannedCheck } from "./types.js";
@@ -60,7 +61,7 @@ describe("executePlannedChecks", () => {
     expect(order).toEqual(["s1", "s2"]);
   });
 
-  it("lets a genuine engine execution failure propagate instead of fabricating a result", async () => {
+  it("isolates a genuine engine execution failure as an operational-error check outcome, not a thrown rejection", async () => {
     const engine: Engine = {
       identity: { id: "flaky-engine", version: "1.0.0" },
       capabilities: ["static-evidence"],
@@ -68,8 +69,37 @@ describe("executePlannedChecks", () => {
       execute: () => Promise.reject(new Error("engine crashed")),
     };
 
-    await expect(executePlannedChecks([check("lantern/accessible-name", "s1")], [engine], () => ({}))).rejects.toThrow(
-      "engine crashed",
+    const failing = check("lantern/accessible-name", "s1");
+    const executed = await executePlannedChecks([failing, check("lantern/accessible-name", "s2")], [engine], () => ({}));
+
+    expect(executed).toHaveLength(2);
+    const [first, second] = executed;
+    expect(first?.result).toMatchObject({
+      checkId: failing.checkId,
+      componentId: failing.componentId,
+      stateId: failing.stateId,
+      ruleId: failing.ruleId,
+      status: "review",
+      outcomeReason: "operational-error",
+      reason: "engine crashed",
+      engine: { name: "flaky-engine", version: "1.0.0" },
+    });
+    // The second, independent check still ran: one check's engine exception
+    // never aborts execution of the others.
+    expect(second?.result.status).toBe("review");
+    expect(second?.result.outcomeReason).toBe("operational-error");
+  });
+
+  it("never reclassifies cancellation as an operational-error check outcome", async () => {
+    const engine: Engine = {
+      identity: { id: "flaky-engine", version: "1.0.0" },
+      capabilities: ["static-evidence"],
+      supports: () => ({ kind: "supported" }),
+      execute: () => Promise.reject(new AuditCancelledError()),
+    };
+
+    await expect(executePlannedChecks([check("lantern/accessible-name", "s1")], [engine], () => ({}))).rejects.toBeInstanceOf(
+      AuditCancelledError,
     );
   });
 });

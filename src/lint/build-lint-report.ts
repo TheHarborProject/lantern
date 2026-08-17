@@ -1,6 +1,8 @@
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { Browser } from "playwright";
+import { LanternError } from "../errors/lantern-error.js";
+import { LintSelectionError } from "../errors/lint-selection-error.js";
 import { resolveRulesForFile } from "../config/resolve/resolve-rules-for-file.js";
 import { createLintExecutionSession } from "../component-runtime/runtime-session.js";
 import { resolveIsolationGlobals } from "../component-runtime/resolve-isolation-globals.js";
@@ -69,13 +71,44 @@ export async function buildLintReport(options: BuildLintReportOptions): Promise<
     await options.events?.({ type: "run-completed", runId, timestamp: report.finishedAt, report });
     return report;
   } catch (error) {
-    const cancelled = error instanceof AuditCancelledError || options.signal?.aborted === true;
+    // A typed Lantern error raised before any component was attempted (bad
+    // target path, invalid selection, ...) is an input-validation failure,
+    // never an operational engine failure: preserve its own type/code and
+    // `--debug` stack/cause fidelity by letting it propagate exactly as it
+    // did before RFC-009, instead of downgrading it to a generic diagnostic.
+    if (!(error instanceof PartialRunFailure) && error instanceof LanternError) {
+      throw error;
+    }
+
+    const cause = error instanceof PartialRunFailure ? error.cause : error;
+    const collectedComponents = error instanceof PartialRunFailure ? error.componentReports : [];
+    const collectedDiagnostics = error instanceof PartialRunFailure ? error.diagnostics : [];
+    const cancelled = cause instanceof AuditCancelledError || options.signal?.aborted === true;
     const finishedAt = new Date().toISOString();
-    const diagnostic = operationalDiagnostic(error, cancelled);
-    const report = failedReport(options, runId, startedAt, finishedAt, cancelled, diagnostic);
+    const diagnostic = operationalDiagnostic(cause, cancelled);
+    const report = failedReport(options, runId, startedAt, finishedAt, cancelled, diagnostic, collectedComponents, collectedDiagnostics);
     await options.events?.({ type: "diagnostic", runId, timestamp: finishedAt, diagnostic });
     await options.events?.({ type: cancelled ? "run-cancelled" : "run-failed", runId, timestamp: finishedAt, report });
     return report;
+  }
+}
+
+/**
+ * Wraps an error raised while components were already being processed, so
+ * whatever was already collected survives into the run's failure report
+ * instead of being discarded (RFC-009.1): a browser-session-wide failure
+ * (e.g. the browser fails to launch) still ends the run, but every component
+ * report and check diagnostic gathered before that point remains inspectable.
+ */
+class PartialRunFailure extends Error {
+  readonly componentReports: readonly ComponentReport[];
+  readonly diagnostics: readonly LintDiagnostic[];
+
+  constructor(cause: unknown, componentReports: readonly ComponentReport[], diagnostics: readonly LintDiagnostic[]) {
+    super("Audit run failed after partially completing.", { cause });
+    this.name = "PartialRunFailure";
+    this.componentReports = componentReports;
+    this.diagnostics = diagnostics;
   }
 }
 
@@ -99,9 +132,9 @@ async function buildSuccessfulLintReport(options: BuildLintReportOptions, runId:
     launch: options.launch,
   });
 
-  let componentReports: ComponentReport[];
+  const componentReports: ComponentReport[] = [];
+  const checkDiagnostics: LintDiagnostic[] = [];
   try {
-    componentReports = [];
     // Sequential by design (RFC-008 defers concurrency): normalized result
     // ordering must never depend on browser/engine completion order.
     for (const component of includedComponents) {
@@ -115,11 +148,16 @@ async function buildSuccessfulLintReport(options: BuildLintReportOptions, runId:
         configResolution.configsById,
         engines,
         session,
-        { runId, signal: options.signal, events: options.events, stateIds: options.stateIds, checkIds: options.checkIds },
+        { runId, signal: options.signal, events: options.events, stateIds: options.stateIds, checkIds: options.checkIds, diagnostics: checkDiagnostics },
       );
       componentReports.push(report);
       await options.events?.({ type: "component-completed", runId, timestamp: new Date().toISOString(), component: report });
     }
+  } catch (error) {
+    // Whatever was already collected (components, and their check-level
+    // operational diagnostics) survives into the run's failure report — see
+    // `PartialRunFailure`.
+    throw new PartialRunFailure(error, componentReports, checkDiagnostics);
   } finally {
     await session.close();
   }
@@ -160,6 +198,7 @@ async function buildSuccessfulLintReport(options: BuildLintReportOptions, runId:
         message: diagnostic.message,
       })),
       ...configResolution.diagnostics,
+      ...checkDiagnostics,
     ],
     standards,
     summary: summarizePlanning(componentReports, Date.now() - startedAt),
@@ -198,7 +237,15 @@ async function buildComponentReport(
   configsById: ReadonlyMap<string, NonNullable<ResolvedConfig["components"][string]>>,
   engines: readonly Engine[],
   session: LintExecutionSession,
-  execution: { readonly runId: string; readonly signal?: AbortSignal | undefined; readonly events?: AuditEventSink | undefined; readonly stateIds?: readonly string[] | undefined; readonly checkIds?: readonly string[] | undefined },
+  execution: {
+    readonly runId: string;
+    readonly signal?: AbortSignal | undefined;
+    readonly events?: AuditEventSink | undefined;
+    readonly stateIds?: readonly string[] | undefined;
+    readonly checkIds?: readonly string[] | undefined;
+    /** Mutable accumulator: check-level operational-error diagnostics discovered while building this component. */
+    readonly diagnostics: LintDiagnostic[];
+  },
 ): Promise<ComponentReport> {
   const accessibility = accessibilityById.get(component.id) ?? emptyAccessibility(component);
   const componentConfig = configsById.get(component.id);
@@ -247,6 +294,22 @@ async function buildComponentReport(
       if (executed !== undefined) {
         (checksByState.get(state.id) ?? (checksByState.set(state.id, []), checksByState.get(state.id)!)).push(executed.result);
         await execution.events?.({ type: "check-completed", runId: execution.runId, timestamp: new Date().toISOString(), result: executed.result });
+        if (executed.result.outcomeReason === "operational-error") {
+          const diagnostic: LintDiagnostic = {
+            code: "CHECK_OPERATIONAL_ERROR",
+            severity: "error",
+            scope: "check",
+            source: component.source,
+            component: component.name,
+            componentId: component.id,
+            stateId: state.id,
+            checkId: check.checkId,
+            engine: executed.result.engine,
+            message: executed.result.reason ?? executed.result.message ?? `"${check.ruleId}" failed operationally for "${component.name}".`,
+          };
+          execution.diagnostics.push(diagnostic);
+          await execution.events?.({ type: "diagnostic", runId: execution.runId, timestamp: new Date().toISOString(), diagnostic });
+        }
       }
     }
     await execution.events?.({
@@ -497,12 +560,12 @@ function emptyAccessibility(component: CanonicalComponent): AccessibilityCompone
 
 function validateSelection(options: BuildLintReportOptions, model: CanonicalComponentModel): ReadonlySet<string> | undefined {
   if (options.stateIds !== undefined || options.checkIds !== undefined) {
-    throw new Error("State/check ID selection is declared but not supported by RFC-009 execution; select canonical component IDs instead.");
+    throw new LintSelectionError("State/check ID selection is declared but not supported by RFC-009 execution; select canonical component IDs instead.");
   }
   if (options.componentIds === undefined) return undefined;
   const known = new Set(model.components.map((component) => component.id));
   const unknown = options.componentIds.filter((id) => !known.has(id));
-  if (unknown.length > 0) throw new Error(`Unknown canonical component ID${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`);
+  if (unknown.length > 0) throw new LintSelectionError(`Unknown canonical component ID${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`);
   return new Set(options.componentIds);
 }
 
@@ -510,17 +573,36 @@ function snapshotRules(rules: ResolvedConfig["rules"]): Readonly<Record<string, 
   return Object.fromEntries(Object.entries(rules).map(([id, value]) => [id, Array.isArray(value) ? value[0] : value]));
 }
 
+/**
+ * Diagnostic for a run that did not complete for reasons outside any single
+ * check (cancellation, or a genuinely unrecoverable orchestration/runtime
+ * failure such as a browser that never launches). A typed `LanternError`
+ * raised here keeps its own `code` instead of being flattened to a generic
+ * "OPERATIONAL_ERROR" — recoverable per-check failures never reach this
+ * function; see `executePlannedChecks` and the check-level diagnostic built
+ * alongside `outcomeReason: "operational-error"` in `buildComponentReport`.
+ */
 function operationalDiagnostic(error: unknown, cancelled: boolean): LintDiagnostic {
-  return {
-    code: cancelled ? "AUDIT_CANCELLED" : "OPERATIONAL_ERROR",
-    severity: cancelled ? "warning" : "error",
-    scope: "run",
-    source: "lantern",
-    message: error instanceof Error ? error.message : String(error),
-  };
+  if (cancelled) {
+    return { code: "AUDIT_CANCELLED", severity: "warning", scope: "run", source: "lantern", message: error instanceof Error ? error.message : String(error) };
+  }
+  if (error instanceof LanternError) {
+    return { code: error.code, severity: "error", scope: "run", source: "lantern", message: error.message };
+  }
+  return { code: "OPERATIONAL_ERROR", severity: "error", scope: "run", source: "lantern", message: error instanceof Error ? error.message : String(error) };
 }
 
-function failedReport(options: BuildLintReportOptions, runId: string, startedAt: string, finishedAt: string, cancelled: boolean, diagnostic: LintDiagnostic): LintReport {
+function failedReport(
+  options: BuildLintReportOptions,
+  runId: string,
+  startedAt: string,
+  finishedAt: string,
+  cancelled: boolean,
+  diagnostic: LintDiagnostic,
+  componentReports: readonly ComponentReport[] = [],
+  extraDiagnostics: readonly LintDiagnostic[] = [],
+): LintReport {
+  const ruleStandards = ruleStandardsIndex();
   return {
     version: 3,
     runId,
@@ -532,9 +614,12 @@ function failedReport(options: BuildLintReportOptions, runId: string, startedAt:
     provider: { kind: "unavailable", reason: "Audit did not complete." },
     engines: [],
     config: { standards: options.config.standards, rules: snapshotRules(options.config.rules) },
-    diagnostics: [diagnostic],
-    standards: options.config.standards.map((standard) => ({ standard, components: [] })),
-    summary: { componentsPass: 0, componentsFail: 0, componentsReview: 0, componentsSkipped: 0, checksPass: 0, checksFail: 0, checksReview: 0, durationMs: Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt)) },
+    diagnostics: [...extraDiagnostics, diagnostic],
+    standards: options.config.standards.map((standard) => ({
+      standard,
+      components: componentsForStandard(componentReports, standard, ruleStandards),
+    })),
+    summary: summarizePlanning(componentReports, Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt))),
   };
 }
 
