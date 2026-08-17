@@ -38,9 +38,13 @@ function isConfigLikeFile(name: string): boolean {
  * or the other built-in exclusions, which stay component-discovery-proof
  * regardless of configuration.
  */
-export function findSourceFiles(root: string, ignorePatterns: readonly string[] = []): string[] {
+export function findSourceFiles(
+  root: string,
+  ignorePatterns: readonly string[] = [],
+  sourceDirectory: string = root,
+): string[] {
   const files: string[] = [];
-  visit(root, root, files, ignorePatterns);
+  visit(root, sourceDirectory, files, ignorePatterns);
   return files.sort(compareText);
 }
 

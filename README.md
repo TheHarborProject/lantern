@@ -25,13 +25,55 @@ pnpm exec lantern --help
 
 ## Configuration
 
-Lantern recognizes `lantern.config.json` and `.lantern.json`. The foundation schema keeps project lifecycle and optional form authentication settings while component audit configuration is introduced by later RFCs.
+Create the smallest valid project configuration interactively:
+
+```bash
+lantern init
+```
+
+Lantern detects the nearest `package.json`, package manager, and conventional
+source directories, then guides you through the startup script, component
+source location, accessibility standard, and optional ignore patterns. Every
+package script remains selectable, source suggestions include only directories
+that exist, and supported standards come from Lantern's schema.
+
+The generated file is deliberately minimal. Choosing the project root, WCAG
+2.2 AA, and no ignore patterns relies on Lantern's implicit defaults, producing:
+
+```json
+{
+  "project": {
+    "startScript": "dev"
+  }
+}
+```
+
+The command creates `.lantern/config.json` and never overwrites an existing
+Lantern configuration. Lantern also recognizes the legacy conventional names
+`lantern.config.json` and `.lantern.json`.
+
+A custom source directory, standard, and ignore selection is serialized using
+the existing configuration model:
+
+```json
+{
+  "project": {
+    "startScript": "storybook",
+    "sourceDirectory": "src/components"
+  },
+  "standards": ["wcag21-aa"],
+  "ignorePatterns": ["src/generated/**"]
+}
+```
+
+The foundation schema keeps project lifecycle and optional form authentication settings while component audit configuration is introduced by later RFCs. A manually authored configuration may include additional fields:
 
 ```json
 {
   "project": {
     "root": ".",
     "workingDirectory": ".",
+    "sourceDirectory": ".",
     "baseUrl": "http://localhost:3000",
     "startScript": "dev",
     "autoStart": false

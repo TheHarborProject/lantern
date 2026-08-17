@@ -8,6 +8,7 @@ import type { ProjectConfig } from "../../schemas/project.js";
 export const defaultProjectConfig: ProjectConfig = {
   root: ".",
   workingDirectory: ".",
+  sourceDirectory: ".",
   baseUrl: "http://localhost:3000",
   startScript: "dev",
   autoStart: true,

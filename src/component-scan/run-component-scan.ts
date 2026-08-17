@@ -30,12 +30,13 @@ interface ExportCandidate {
 export function runComponentScan(
   projectRoot: string,
   ignorePatterns: readonly string[] = [],
+  sourceDirectory: string = projectRoot,
 ): CanonicalComponentModel {
   let sourceFiles: string[];
   try {
-    sourceFiles = findSourceFiles(projectRoot, ignorePatterns);
+    sourceFiles = findSourceFiles(projectRoot, ignorePatterns, sourceDirectory);
   } catch (cause) {
-    throw new ComponentScanError(`Could not scan component sources in ${projectRoot}`, { cause });
+    throw new ComponentScanError(`Could not scan component sources in ${sourceDirectory}`, { cause });
   }
 
   const compilerOptions = loadProjectCompilerOptions(projectRoot);
