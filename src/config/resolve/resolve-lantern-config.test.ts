@@ -11,7 +11,7 @@ describe("resolveLanternConfig", () => {
     expect(resolved).toEqual({
       standards: ["wcag22-aa"],
       extends: [],
-      engines: { static: true, axe: false, lighthouse: false },
+      engines: { static: true, rendered: true, axe: false, lighthouse: false },
       settings: {},
       rules: {},
       components: {},
@@ -67,7 +67,7 @@ describe("resolveLanternConfig", () => {
   it("lets project engines override defaults without requiring every engine to be listed", () => {
     const raw = configSchema.parse({ project: {}, engines: { axe: true } });
 
-    expect(resolveLanternConfig(raw).engines).toEqual({ static: true, axe: true, lighthouse: false });
+    expect(resolveLanternConfig(raw).engines).toEqual({ static: true, rendered: true, axe: true, lighthouse: false });
   });
 
   it("records declared overrides in order for later per-file resolution", () => {

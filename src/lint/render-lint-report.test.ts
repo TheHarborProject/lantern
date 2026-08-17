@@ -202,6 +202,75 @@ describe("renderLintReport", () => {
     expect(output).toContain("Summary\n1 component · 0 passed · 0 failed · 1 review · 0 skipped\n1.42s");
   });
 
+  it("renders available engine provenance in the provider line", () => {
+    const output = renderLintReport(
+      report({ provider: { kind: "available", provider: "lantern-static@1.0.0, lantern-rendered-dom@1.0.0" } }),
+      { verbose: false },
+    );
+
+    expect(output).toContain("Provider   lantern-static@1.0.0, lantern-rendered-dom@1.0.0");
+  });
+
+  it("summarizes non-passing checks compactly by default, grouped by rule and status", () => {
+    const output = renderLintReport(report({
+      standards: [{
+        standard: "wcag22-aa",
+        components: [
+          component({
+            status: "fail",
+            states: [
+              state({
+                checks: [
+                  { ruleId: "lantern/accessible-name", severity: "error", status: "fail", message: "no accessible name" },
+                  { ruleId: "lantern/keyboard-access", severity: "error", status: "pass", message: "received focus" },
+                ],
+                status: "fail",
+              }),
+              state({
+                checks: [
+                  { ruleId: "lantern/accessible-name", severity: "error", status: "fail", message: "no accessible name" },
+                  { ruleId: "lantern/keyboard-access", severity: "error", status: "pass", message: "received focus" },
+                ],
+                status: "fail",
+              }),
+            ],
+          }),
+        ],
+      }],
+    }), { verbose: false });
+
+    expect(output).toContain("✗ lantern/accessible-name  2 states · no accessible name");
+    expect(output).not.toContain("lantern/keyboard-access");
+  });
+
+  it("shows per-state check provenance in verbose output", () => {
+    const output = renderLintReport(report({
+      standards: [{
+        standard: "wcag22-aa",
+        components: [
+          component({
+            states: [
+              state({
+                checks: [
+                  {
+                    ruleId: "lantern/accessible-name",
+                    severity: "error",
+                    status: "review",
+                    message: "cannot confirm at runtime",
+                    engine: { name: "lantern-static", version: "1.0.0" },
+                  },
+                ],
+                status: "review",
+              }),
+            ],
+          }),
+        ],
+      }],
+    }), { verbose: true });
+
+    expect(output).toContain("◌ lantern/accessible-name  lantern-static@1.0.0  cannot confirm at runtime");
+  });
+
   it("falls back to unknown standard identifiers", () => {
     const output = renderLintReport(report({ standards: [{ standard: "future-standard", components: [component()] }] }), {
       verbose: false,

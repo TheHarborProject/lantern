@@ -1,4 +1,6 @@
 import type {
+  CheckResult,
+  CheckStatus,
   ComponentReport,
   LintDiagnostic,
   LintReport,
@@ -128,6 +130,7 @@ function renderComponent(component: ComponentReport, options: RenderLintReportOp
   }
 
   lines.push(...renderPlanning(component));
+  lines.push(...renderCheckSummary(component));
 
   const dimensions = component.dimensions ?? [];
   if (dimensions.length > 0 && options.verbose) {
@@ -141,10 +144,60 @@ function renderComponent(component: ComponentReport, options: RenderLintReportOp
     component.states.forEach((state, index) => {
       lines.push(`  #${index + 1}  ${describeState(state)}`);
       lines.push(`      state: ${state.stateId}`);
+      lines.push(...state.checks.map((check) => `      ${renderCheckLine(check)}`));
     });
   }
 
   return lines;
+}
+
+/**
+ * Compact, default-visible summary of real check outcomes (RFC-008): one
+ * line per distinct rule/status combination that is not a plain pass, so
+ * normal output stays concise while still surfacing what actually failed or
+ * needs review. Full per-state detail is reserved for `--verbose`.
+ */
+function renderCheckSummary(component: ComponentReport): string[] {
+  const groups = groupChecks(component.states);
+  return groups
+    .filter((group) => group.status !== "pass")
+    .map((group) => {
+      const scope =
+        group.count === component.states.length
+          ? `${group.count} ${plural(group.count, "state", "states")}`
+          : `${group.count}/${component.states.length} states`;
+      const message = group.message === undefined ? "" : ` · ${group.message}`;
+      return `  ${STATUS_ICON[group.status]} ${group.ruleId}  ${scope}${message}`;
+    });
+}
+
+interface CheckGroup {
+  readonly ruleId: string;
+  readonly status: CheckStatus;
+  readonly count: number;
+  readonly message: string | undefined;
+}
+
+function groupChecks(states: readonly StateReport[]): CheckGroup[] {
+  const groups = new Map<string, { ruleId: string; status: CheckStatus; count: number; message: string | undefined }>();
+  for (const state of states) {
+    for (const check of state.checks) {
+      const key = `${check.ruleId}::${check.status}`;
+      const existing = groups.get(key);
+      if (existing === undefined) {
+        groups.set(key, { ruleId: check.ruleId, status: check.status, count: 1, message: check.message });
+      } else {
+        existing.count += 1;
+      }
+    }
+  }
+  return [...groups.values()].sort((a, b) => (a.ruleId < b.ruleId ? -1 : a.ruleId > b.ruleId ? 1 : 0));
+}
+
+function renderCheckLine(check: CheckResult): string {
+  const engine = check.engine === undefined ? "—" : `${check.engine.name}@${check.engine.version ?? "?"}`;
+  const message = check.message === undefined ? "" : `  ${check.message}`;
+  return `${STATUS_ICON[check.status]} ${check.ruleId}  ${engine}${message}`;
 }
 
 function renderPlanning(component: ComponentReport): string[] {

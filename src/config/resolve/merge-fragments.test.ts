@@ -21,11 +21,11 @@ describe("mergeFragment", () => {
   });
 
   it("merges engines by key, later layer wins per engine", () => {
-    const merged = mergeFragment(base({ engines: { static: true, axe: false, lighthouse: false } }), {
+    const merged = mergeFragment(base({ engines: { static: true, rendered: true, axe: false, lighthouse: false } }), {
       engines: { axe: true },
     });
 
-    expect(merged.engines).toEqual({ static: true, axe: true, lighthouse: false });
+    expect(merged.engines).toEqual({ static: true, rendered: true, axe: true, lighthouse: false });
   });
 
   it("merges rules by key, later layer wins per rule id", () => {
