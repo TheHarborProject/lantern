@@ -71,9 +71,9 @@ const accessibleNameRule: LanternRuleDefinition = {
 
 /**
  * Genuine rendered rule (RFC-008): mounts a focusable/interactive component
- * through the RFC-007.5 session runtime and verifies the rendered output
- * actually receives (or correctly withholds, when disabled) keyboard focus —
- * evidence no static scan can provide. Evaluated by
+ * through the RFC-007.5 session runtime and verifies that the rendered output
+ * participates in (or, when disabled, is excluded from) the sequential
+ * keyboard focus order — evidence no static scan can provide. Evaluated by
  * {@link createRenderedDomEngine}.
  */
 const keyboardAccessRule: LanternRuleDefinition = {

@@ -13,9 +13,11 @@ function resolvedConfig(root: string, overrides: Record<string, unknown> = {}): 
   return resolveConfigPaths(raw, join(root, "lantern.config.json"));
 }
 
-interface FocusProbeResult {
-  readonly found: boolean;
-  readonly focused: boolean;
+interface KeyboardAccessProbeResult {
+  readonly usableInteractiveCount: number;
+  readonly enabledInteractiveCount: number;
+  readonly tabbableCount: number;
+  readonly disabledInteractiveCount: number;
 }
 
 /**
@@ -24,7 +26,10 @@ interface FocusProbeResult {
  * props, check for a mount error, then the rendered engine's own focus
  * probe) — mirrors the fake used in `component-runtime/runtime-session.test.ts`.
  */
-function fakeRenderPage(probes: readonly FocusProbeResult[]): { readonly page: Page; readonly evaluate: ReturnType<typeof vi.fn> } {
+function fakeRenderPage(probes: readonly KeyboardAccessProbeResult[]): {
+  readonly page: Page;
+  readonly evaluate: ReturnType<typeof vi.fn>;
+} {
   const evaluate = vi.fn();
   for (const probe of probes) {
     evaluate
@@ -273,11 +278,24 @@ describe("buildLintReport", () => {
       `,
     );
     const { page, evaluate } = fakeRenderPage([
-      { found: true, focused: true },
-      { found: true, focused: false },
+      {
+        usableInteractiveCount: 1,
+        enabledInteractiveCount: 1,
+        tabbableCount: 1,
+        disabledInteractiveCount: 0,
+      },
+      {
+        usableInteractiveCount: 1,
+        enabledInteractiveCount: 0,
+        tabbableCount: 0,
+        disabledInteractiveCount: 1,
+      },
     ]);
     const newPage = vi.fn(() => Promise.resolve(page));
-    const browser = { newPage, close: vi.fn(() => Promise.resolve(undefined)) } as unknown as Browser;
+    const browser = {
+      newPage,
+      close: vi.fn(() => Promise.resolve(undefined)),
+    } as unknown as Browser;
     const launch = vi.fn(() => Promise.resolve(browser));
     const bundle = vi.fn(() => Promise.resolve("/* bundled */"));
 
@@ -311,12 +329,25 @@ describe("buildLintReport", () => {
       `,
     );
     const { page } = fakeRenderPage([
-      { found: true, focused: true },
-      // Bug: the disabled state still receives keyboard focus.
-      { found: true, focused: true },
+      {
+        usableInteractiveCount: 1,
+        enabledInteractiveCount: 1,
+        tabbableCount: 1,
+        disabledInteractiveCount: 0,
+      },
+      // Bug: the rendered disabled state is actually enabled and excluded from tab order.
+      {
+        usableInteractiveCount: 1,
+        enabledInteractiveCount: 1,
+        tabbableCount: 0,
+        disabledInteractiveCount: 0,
+      },
     ]);
     const newPage = vi.fn(() => Promise.resolve(page));
-    const browser = { newPage, close: vi.fn(() => Promise.resolve(undefined)) } as unknown as Browser;
+    const browser = {
+      newPage,
+      close: vi.fn(() => Promise.resolve(undefined)),
+    } as unknown as Browser;
     const launch = vi.fn(() => Promise.resolve(browser));
     const bundle = vi.fn(() => Promise.resolve("/* bundled */"));
 
@@ -330,7 +361,9 @@ describe("buildLintReport", () => {
     const button = report.standards[0]?.components[0];
     expect(button?.status).toBe("fail");
     expect(button?.states.map((state) => state.checks[0]?.status)).toEqual(["pass", "fail"]);
-    expect(button?.states[1]?.checks[0]?.message).toContain("still received keyboard focus");
+    expect(button?.states[1]?.checks[0]?.message).toContain(
+      "none are in the sequential keyboard focus order",
+    );
   });
 
   it("does not launch a runtime for a rendered-dom rule no engine actually supports", async () => {
