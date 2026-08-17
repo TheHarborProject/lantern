@@ -9,19 +9,23 @@ import type { Engine, EngineExecutionContext, PlannedCheck, SupportResult } from
  * state's props through the same reused browser/bundle.
  *
  * Evaluates `lantern/keyboard-access`: whether a component the accessibility
- * projection identifies as focusable actually receives keyboard focus when
- * rendered (and correctly withholds it while disabled) — evidence no static
- * scan can provide, since it depends on the real rendered DOM.
+ * projection identifies as focusable renders an element in the sequential
+ * keyboard focus order (and correctly removes a disabled element from that
+ * order) — evidence no static scan can provide, since it depends on the real
+ * rendered DOM.
  */
 export const LANTERN_RENDERED_ENGINE_ID = "lantern-rendered-dom";
 export const LANTERN_RENDERED_ENGINE_VERSION = "1.0.0";
 
 const SUPPORTED_RULE_ID = "lantern/keyboard-access";
-const FOCUSABLE_SELECTOR = "button, a[href], input, select, textarea, [tabindex]";
+const INTERACTIVE_SELECTOR =
+  "button, a[href], area[href], input, select, textarea, summary, iframe, object, embed, audio[controls], video[controls], [contenteditable], [tabindex]";
 
-interface FocusProbeResult {
-  readonly found: boolean;
-  readonly focused: boolean;
+interface KeyboardAccessProbeResult {
+  readonly usableInteractiveCount: number;
+  readonly enabledInteractiveCount: number;
+  readonly tabbableCount: number;
+  readonly disabledInteractiveCount: number;
 }
 
 export function createRenderedDomEngine(): Engine {
@@ -30,10 +34,16 @@ export function createRenderedDomEngine(): Engine {
     capabilities: ["rendered-dom"],
     supports(check: PlannedCheck): SupportResult {
       if (check.requiredCapability !== "rendered-dom" || check.ruleId !== SUPPORTED_RULE_ID) {
-        return { kind: "unsupported", reason: `${LANTERN_RENDERED_ENGINE_ID} does not evaluate "${check.ruleId}".` };
+        return {
+          kind: "unsupported",
+          reason: `${LANTERN_RENDERED_ENGINE_ID} does not evaluate "${check.ruleId}".`,
+        };
       }
       if (!check.accessibility.interactivity.focusable) {
-        return { kind: "unsupported", reason: "component is not identified as interactive/focusable" };
+        return {
+          kind: "unsupported",
+          reason: "component is not identified as interactive/focusable",
+        };
       }
       return { kind: "supported" };
     },
@@ -46,62 +56,77 @@ export function createRenderedDomEngine(): Engine {
 
       const engine = { name: LANTERN_RENDERED_ENGINE_ID, version: LANTERN_RENDERED_ENGINE_VERSION };
       const location = { file: check.source };
-      const expectDisabled = check.stateProps?.["disabled"] === true;
-
       // Evaluated as a string, not a typed function: the project's tsconfig
       // has no DOM lib (this is a Node CLI), so this body only ever type-
       // checks inside the isolation page itself, exactly like the existing
       // mount-error probe in `runtime-session.ts`.
       const probe = await context.runtime.render(check.stateProps ?? {}, async ({ page }) =>
-        page.evaluate<FocusProbeResult>(
+        page.evaluate<KeyboardAccessProbeResult>(
           `(() => {
             var root = document.getElementById("root");
-            var target = root ? root.querySelector(${JSON.stringify(FOCUSABLE_SELECTOR)}) : null;
-            if (!target) { return { found: false, focused: false }; }
-            target.focus();
-            return { found: true, focused: document.activeElement === target };
+            var candidates = root ? Array.from(root.querySelectorAll(${JSON.stringify(INTERACTIVE_SELECTOR)})) : [];
+            var usable = candidates.filter(function (element) {
+              if (element.closest("[hidden], [inert]")) { return false; }
+              if (element.getClientRects().length === 0) { return false; }
+              for (var current = element; current; current = current.parentElement) {
+                var style = getComputedStyle(current);
+                if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") {
+                  return false;
+                }
+              }
+              return true;
+            });
+            var disabled = usable.filter(function (element) { return element.matches(":disabled"); });
+            var enabled = usable.filter(function (element) { return !element.matches(":disabled"); });
+            var tabbable = enabled.filter(function (element) {
+              var tag = element.tagName.toLowerCase();
+              var nativeFocusable =
+                tag === "button" || tag === "select" || tag === "textarea" || tag === "summary" ||
+                tag === "iframe" || tag === "object" || tag === "embed" ||
+                ((tag === "a" || tag === "area") && element.hasAttribute("href")) ||
+                (tag === "input" && element.getAttribute("type") !== "hidden") ||
+                ((tag === "audio" || tag === "video") && element.hasAttribute("controls"));
+              var explicitlyFocusable = element.hasAttribute("tabindex") || element.hasAttribute("contenteditable");
+              return (nativeFocusable || explicitlyFocusable) && element.tabIndex >= 0;
+            });
+            return {
+              usableInteractiveCount: usable.length,
+              enabledInteractiveCount: enabled.length,
+              tabbableCount: tabbable.length,
+              disabledInteractiveCount: disabled.length
+            };
           })()`,
         ),
       );
 
-      if (!probe.found) {
+      if (probe.usableInteractiveCount === 0) {
         return {
           ruleId: check.ruleId,
           severity: check.severity,
           status: "fail",
-          message: `"${check.component}" is identified as interactive but rendered no focusable element (expected one of: ${FOCUSABLE_SELECTOR}).`,
+          message: `"${check.component}" is identified as interactive but rendered no visible, usable interactive element.`,
           location,
           engine,
         };
       }
-      if (!expectDisabled && !probe.focused) {
+      if (probe.enabledInteractiveCount > 0 && probe.tabbableCount === 0) {
         return {
           ruleId: check.ruleId,
           severity: check.severity,
           status: "fail",
-          message: `"${check.component}" rendered a focusable element that did not receive keyboard focus.`,
+          message: `"${check.component}" rendered an enabled interactive element, but none are in the sequential keyboard focus order.`,
           location,
           engine,
         };
       }
-      if (expectDisabled && probe.focused) {
-        return {
-          ruleId: check.ruleId,
-          severity: check.severity,
-          status: "fail",
-          message: `"${check.component}" rendered with "disabled" but its element still received keyboard focus.`,
-          location,
-          engine,
-        };
-      }
-
       return {
         ruleId: check.ruleId,
         severity: check.severity,
         status: "pass",
-        message: expectDisabled
-          ? `"${check.component}" correctly withheld keyboard focus while disabled.`
-          : `"${check.component}" rendered a focusable element that received keyboard focus.`,
+        message:
+          probe.tabbableCount > 0
+            ? `"${check.component}" rendered an enabled interactive element in the sequential keyboard focus order.`
+            : `"${check.component}" rendered only disabled interactive elements, correctly excluding them from the sequential keyboard focus order.`,
         location,
         engine,
       };
