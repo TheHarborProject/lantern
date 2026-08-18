@@ -2,12 +2,13 @@ import type { RawConfig, ResolvedLanternConfig } from "../../types/config.js";
 import { LANTERN_DEFAULTS } from "./lantern-defaults.js";
 import { mergeFragment, type ConfigFragment } from "./merge-fragments.js";
 import { PRESETS } from "./presets.js";
+import { defaultRulesForStandards } from "../../engines/rule-registry.js";
 
 /**
  * Resolve the RFC-005 accessibility configuration from raw configuration by
  * layering, in this deterministic order:
  *
- *   1. Lantern defaults
+ *   1. Lantern defaults and the stable rule policy for selected standards
  *   2. `extends` presets, in declared order
  *   3. top-level project configuration
  *
@@ -16,7 +17,11 @@ import { PRESETS } from "./presets.js";
  * result is fully populated so consumers never re-derive defaults.
  */
 export function resolveLanternConfig(raw: RawConfig): ResolvedLanternConfig {
-  let resolved = LANTERN_DEFAULTS;
+  const standards = raw.standards ?? LANTERN_DEFAULTS.standards;
+  let resolved = mergeFragment(LANTERN_DEFAULTS, {
+    standards,
+    rules: defaultRulesForStandards(standards),
+  });
 
   for (const presetId of raw.extends ?? []) {
     resolved = mergeFragment(resolved, PRESETS[presetId]);

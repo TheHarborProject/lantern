@@ -215,6 +215,10 @@ describe("lantern init domain", () => {
 
     expect(config.project.root).toBe(root);
     expect(config.project.workingDirectory).toBe(root);
+    expect(config.rules).toEqual({
+      "lantern/accessible-name": "error",
+      "lantern/keyboard-access": "error",
+    });
   });
 });
 
