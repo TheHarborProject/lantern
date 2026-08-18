@@ -26,6 +26,7 @@ describe("resolveLanternConfig", () => {
         scan: { nonInteractive: "refresh" },
         persistence: { local: true, ci: false },
         git: { capture: true },
+        history: { path: ".lantern/surveys", listMax: 20 },
       },
     });
   });

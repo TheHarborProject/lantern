@@ -10,9 +10,11 @@ import { runSurvey, type SurveySelectionRequest } from "../../survey/run-survey.
 import type { GlobalCliOptions } from "../global-cli-options.js";
 import { printCliError } from "../print-cli-error.js";
 import { shouldUseColor } from "../terminal-style.js";
+import { createSurveyHistorySink } from "../../history/service.js";
+import { SurveyHistoryError } from "../../errors/survey-history-error.js";
 
 export interface SurveyCommandOptions {
-  readonly since?: string; readonly name?: string; readonly noSave?: boolean;
+  readonly since?: string; readonly name?: string; readonly save?: boolean;
   readonly verbose?: boolean; readonly minimal?: boolean; readonly compact?: boolean; readonly failOnSkipped?: boolean;
 }
 
@@ -36,8 +38,13 @@ export function registerSurveyCommand(program: Command, sink?: SurveyRunSink): v
         const name = options.name?.trim();
         if (options.name !== undefined && name === "") throw new LintTargetingError("--name must not be empty.");
         const run = await runSurvey({ config, selection, ...(name === undefined ? {} : { name }), cwd: process.cwd() });
-        const save = shouldPersistSurveyRun({ ...(options.noSave === undefined ? {} : { noSave: options.noSave }), ci: process.env.CI !== undefined, localEnabled: config.survey.persistence.local, ciEnabled: config.survey.persistence.ci });
-        await deliverSurveyRun(run, sink, save);
+        const save = shouldPersistSurveyRun({ noSave: options.save === false, ci: process.env.CI !== undefined, localEnabled: config.survey.persistence.local, ciEnabled: config.survey.persistence.ci });
+        try {
+          await deliverSurveyRun(run, sink ?? createSurveyHistorySink(config), save);
+        } catch (cause) {
+          if (cause instanceof LanternError) throw cause;
+          throw new SurveyHistoryError("io", `Could not persist finalized survey ${run.id}.`, { cause });
+        }
         const mode = resolveSurveyOutputMode(options, config.output.mode);
         console.log(renderSurveyRun(run, { mode, color: shouldUseColor(process.stdout.isTTY === true) }));
         process.exitCode = computeSurveyExitCode(run, { failOnSkipped: options.failOnSkipped === true });

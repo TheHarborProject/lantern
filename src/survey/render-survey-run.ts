@@ -20,5 +20,7 @@ export function renderSurveyRun(run: SurveyRunV1, options: RenderSurveyRunOption
     engines: run.engines, config: { standards: run.config.standards, rules: Object.fromEntries(Object.entries(run.config.rules).map(([id, rule]) => [id, rule.severity])) },
     diagnostics: run.diagnostics, standards: run.standards, summary: run.summary,
   };
-  return renderLintReport(report, { ...options, title: "Lantern survey" });
+  const rendered = renderLintReport(report, { ...options, title: "Lantern survey" });
+  if (run.name === undefined || options.mode === "minimal") return rendered;
+  return rendered.replace("Lantern survey\n", `Lantern survey\nName  ${run.name}\n`);
 }

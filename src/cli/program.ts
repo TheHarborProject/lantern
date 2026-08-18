@@ -5,9 +5,20 @@ import { registerInitCommand } from "./commands/init.js";
 import { registerLintCommand } from "./commands/lint.js";
 import { registerScanCommand } from "./commands/scan.js";
 import { registerSurveyCommand } from "./commands/survey.js";
+import { registerListCommand } from "./commands/list-surveys.js";
+import { registerShowCommand } from "./commands/show.js";
+import { registerExportCommand } from "./commands/export.js";
+import { registerDeleteCommand } from "./commands/delete.js";
+import type { DeleteConfirmation } from "./commands/delete.js";
+import type { SurveyRunSink } from "../survey/persistence.js";
+
+export interface CreateProgramOptions {
+  readonly deleteConfirmation?: DeleteConfirmation;
+  readonly surveySink?: SurveyRunSink;
+}
 
 /** Build the Lantern CLI program. */
-export function createProgram(): Command {
+export function createProgram(options: CreateProgramOptions = {}): Command {
   const program = new Command();
 
   program
@@ -28,6 +39,10 @@ Examples:
   lantern scan --all
   lantern survey
   lantern survey src/components
+  lantern list surveys
+  lantern show last
+  lantern export last
+  lantern delete last
 `,
     );
 
@@ -35,7 +50,11 @@ Examples:
   registerInitCommand(program);
   registerLintCommand(program);
   registerScanCommand(program);
-  registerSurveyCommand(program);
+  registerSurveyCommand(program, options.surveySink);
+  registerListCommand(program);
+  registerShowCommand(program);
+  registerExportCommand(program);
+  registerDeleteCommand(program, options.deleteConfirmation);
 
   return program;
 }
