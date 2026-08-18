@@ -9,7 +9,16 @@ import type { ResolvedConfig } from "../types/config.js";
 import { buildLintReport } from "./build-lint-report.js";
 
 function resolvedConfig(root: string, overrides: Record<string, unknown> = {}): ResolvedConfig {
-  const raw = configSchema.parse({ project: { root: "." }, ...overrides });
+  const { rules, ...rest } = overrides;
+  const raw = configSchema.parse({
+    project: { root: "." },
+    ...rest,
+    rules: {
+      "lantern/accessible-name": "off",
+      "lantern/keyboard-access": "off",
+      ...(typeof rules === "object" && rules !== null ? rules : {}),
+    },
+  });
   return resolveConfigPaths(raw, join(root, "lantern.config.json"));
 }
 
@@ -56,6 +65,25 @@ describe("buildLintReport", () => {
 
   afterEach(() => {
     rmSync(root, { recursive: true, force: true });
+  });
+
+  it("executes stable rules in a default WCAG 2.2 AA project", async () => {
+    writeFileSync(join(root, "Button.tsx"), "export const Button = () => <button />;");
+    const { page } = fakeRenderPage([{ usableInteractiveCount: 1, enabledInteractiveCount: 1, tabbableCount: 1, disabledInteractiveCount: 0 }]);
+    const browser = { newPage: vi.fn(() => Promise.resolve(page)), close: vi.fn(() => Promise.resolve(undefined)) } as unknown as Browser;
+
+    const report = await buildLintReport({
+      config: resolveConfigPaths(configSchema.parse({ project: { root: "." } }), join(root, "lantern.config.json")),
+      mode: { kind: "incremental" },
+      bundle: vi.fn(() => Promise.resolve("/* bundled */")),
+      launch: vi.fn(() => Promise.resolve(browser)),
+    });
+
+    expect(report.config.rules).toEqual({ "lantern/accessible-name": "error", "lantern/keyboard-access": "error" });
+    expect(report.standards[0]?.components[0]?.states[0]?.checks.map((check) => check.ruleId)).toEqual([
+      "lantern/accessible-name",
+      "lantern/keyboard-access",
+    ]);
   });
 
   it("reports a ready component with review status and no fabricated checks", async () => {

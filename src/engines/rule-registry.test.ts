@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { KNOWN_STANDARDS } from "../schemas/standards.js";
 import type { GeneratedState } from "../state-planning/types.js";
 import type { AccessibilityComponent, CanonicalComponent } from "../types/component-scan.js";
-import { LANTERN_RULES, ruleStandardsIndex } from "./rule-registry.js";
+import { defaultRulesForStandards, LANTERN_RULES, ruleStandardsIndex } from "./rule-registry.js";
 
 function component(): CanonicalComponent {
   return {
@@ -47,6 +47,21 @@ describe("LANTERN_RULES", () => {
     for (const rule of LANTERN_RULES) {
       expect(rule.standards.length).toBeGreaterThan(0);
     }
+  });
+
+  it("activates only stable implemented rules for WCAG defaults", () => {
+    expect(defaultRulesForStandards(["wcag22-aa"])).toEqual({
+      "lantern/accessible-name": "error",
+      "lantern/keyboard-access": "error",
+    });
+    expect(defaultRulesForStandards(["wcag21-aa"])).toEqual(defaultRulesForStandards(["wcag22-aa"]));
+    expect(defaultRulesForStandards([])).toEqual({});
+  });
+
+  it("keeps unsupported scaffold rules out of standard-derived defaults", () => {
+    const defaults = defaultRulesForStandards(KNOWN_STANDARDS);
+    expect(defaults).not.toHaveProperty("lantern/color-contrast");
+    expect(defaults).not.toHaveProperty("lantern/focus-visible");
   });
 
   it("gates focus-dependent rules on the component actually being focusable", () => {

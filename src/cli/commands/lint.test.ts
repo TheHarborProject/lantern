@@ -12,7 +12,10 @@ describe("lantern lint", () => {
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), "lantern-lint-"));
     process.chdir(root);
-    writeFileSync(join(root, "lantern.config.json"), JSON.stringify({ project: {} }));
+    writeFileSync(join(root, "lantern.config.json"), JSON.stringify({
+      project: {},
+      rules: { "lantern/accessible-name": "off", "lantern/keyboard-access": "off" },
+    }));
   });
 
   afterEach(() => {
@@ -57,7 +60,7 @@ describe("lantern lint", () => {
   it("evaluates a genuine static check end-to-end and blocks on error severity", async () => {
     writeFileSync(
       join(root, "lantern.config.json"),
-      JSON.stringify({ project: {}, rules: { "lantern/accessible-name": "error" } }),
+      JSON.stringify({ project: {}, rules: { "lantern/accessible-name": "error", "lantern/keyboard-access": "off" } }),
     );
     writeFileSync(
       join(root, "Button.tsx"),

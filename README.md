@@ -52,6 +52,13 @@ The command creates `.lantern/config.json` and never overwrites an existing
 Lantern configuration. Lantern also recognizes the legacy conventional names
 `lantern.config.json` and `.lantern.json`.
 
+The selected standard is operational, not just a report label. Lantern enables
+its stable compatible checks by default; today that means accessible-name
+static analysis and rendered keyboard-access checks for WCAG 2.2 AA. Explicit
+`rules` entries override these defaults, including `"off"`, and matching
+per-file overrides apply last. This changes earlier behavior where a selected
+standard with no explicit rules performed no checks.
+
 A custom source directory, standard, and ignore selection is serialized using
 the existing configuration model:
 

@@ -9,8 +9,8 @@ import { z } from "zod";
  * and remain distinct evaluation contexts; Lantern never merges them into a
  * synthetic compliance standard.
  *
- * Selecting a standard does not imply Lantern can automatically prove every
- * criterion it defines. This RFC only defines configuration.
+ * Stable compatible rules are enabled from this selection by default. This
+ * does not imply Lantern can automatically prove every criterion it defines.
  */
 export const KNOWN_STANDARDS = [
   "wcag21-a",
