@@ -12,16 +12,28 @@ import { printCliError } from "../print-cli-error.js";
 import { shouldUseColor } from "../terminal-style.js";
 import { createSurveyHistorySink } from "../../history/service.js";
 import { SurveyHistoryError } from "../../errors/survey-history-error.js";
+import { InteractiveSurveyError } from "../../errors/interactive-survey-error.js";
+import { createTerminalSurveyPrompter } from "../../interactive/terminal-prompter.js";
+import { prepareInteractiveSurvey } from "../../interactive/workflow.js";
+import type { InteractiveSurveyPrompter } from "../../interactive/types.js";
 
 export interface SurveyCommandOptions {
   readonly since?: string; readonly name?: string; readonly save?: boolean;
+  readonly interactive?: boolean;
   readonly verbose?: boolean; readonly minimal?: boolean; readonly compact?: boolean; readonly failOnSkipped?: boolean;
 }
 
-export function registerSurveyCommand(program: Command, sink?: SurveyRunSink): void {
+export interface SurveyCommandDependencies {
+  readonly sink?: SurveyRunSink | undefined;
+  readonly interactivePrompter?: InteractiveSurveyPrompter | undefined;
+  readonly isInteractiveTerminal?: (() => boolean) | undefined;
+}
+
+export function registerSurveyCommand(program: Command, dependencies: SurveyCommandDependencies = {}): void {
   program.command("survey")
     .argument("[path]", "Limit the survey to components sourced from a file or directory")
     .description("Evaluate accessibility across an explicit component selection.")
+    .option("-i, --interactive", "Select components and states interactively before surveying")
     .option("--since <ref>", "Target components changed since the given Git ref")
     .option("--name <name>", "Attach an optional name to this immutable survey run")
     .option("--no-save", "Do not deliver this run to the configured persistence sink")
@@ -33,14 +45,31 @@ export function registerSurveyCommand(program: Command, sink?: SurveyRunSink): v
       const globalOptions = command.optsWithGlobals<GlobalCliOptions>();
       try {
         if (path !== undefined && options.since !== undefined) throw new LintTargetingError("Cannot combine an explicit path target with --since.");
+        if (options.interactive === true && (path !== undefined || options.since !== undefined)) throw new InteractiveSurveyError("Interactive survey cannot be combined with a path target or --since.");
         const config = loadConfig({ cwd: process.cwd(), explicitPath: globalOptions.config });
-        const selection: SurveySelectionRequest = path !== undefined ? { kind: "path", path } : options.since !== undefined ? { kind: "since", ref: options.since } : { kind: "all" };
         const name = options.name?.trim();
         if (options.name !== undefined && name === "") throw new LintTargetingError("--name must not be empty.");
-        const run = await runSurvey({ config, selection, ...(name === undefined ? {} : { name }), cwd: process.cwd() });
         const save = shouldPersistSurveyRun({ noSave: options.save === false, ci: process.env.CI !== undefined, localEnabled: config.survey.persistence.local, ciEnabled: config.survey.persistence.ci });
+        let run;
+        if (options.interactive === true) {
+          const interactiveTerminal = dependencies.isInteractiveTerminal?.() ?? (process.stdin.isTTY === true && process.stdout.isTTY === true);
+          if (!interactiveTerminal) throw new InteractiveSurveyError("Interactive survey requires an interactive stdin and stdout terminal.");
+          const prepared = await prepareInteractiveSurvey({ config, prompter: dependencies.interactivePrompter ?? createTerminalSurveyPrompter(), save });
+          if (prepared === null) { console.log("Interactive survey cancelled before execution; no SurveyRun was created."); return; }
+          const stateIds = prepared.selection.states.kind === "restricted" ? prepared.selection.states.ids : undefined;
+          run = await runSurvey({
+            config,
+            selection: { kind: "interactive", componentIds: prepared.selection.componentIds, ...(stateIds === undefined ? {} : { stateIds }) },
+            preparedScan: prepared.resolvedScan.scan,
+            scanPolicyOverride: prepared.resolvedScan.effectivePolicy,
+            ...(name === undefined ? {} : { name }), cwd: process.cwd(),
+          });
+        } else {
+          const selection: SurveySelectionRequest = path !== undefined ? { kind: "path", path } : options.since !== undefined ? { kind: "since", ref: options.since } : { kind: "all" };
+          run = await runSurvey({ config, selection, ...(name === undefined ? {} : { name }), cwd: process.cwd() });
+        }
         try {
-          await deliverSurveyRun(run, sink ?? createSurveyHistorySink(config), save);
+          await deliverSurveyRun(run, dependencies.sink ?? createSurveyHistorySink(config), save);
         } catch (cause) {
           if (cause instanceof LanternError) throw cause;
           throw new SurveyHistoryError("io", `Could not persist finalized survey ${run.id}.`, { cause });

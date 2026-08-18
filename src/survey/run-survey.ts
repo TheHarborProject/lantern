@@ -9,6 +9,7 @@ import type { LintTargetMode } from "../lint/types.js";
 import { applySurveyScanPolicy, inspectScanState } from "../scan/scan-service.js";
 import type { ResolvedConfig } from "../types/config.js";
 import type { SurveyScanPolicy } from "../schemas/survey.js";
+import type { ResolvedSurveyScan } from "../scan/types.js";
 import { DEFAULT_MAX_STATES } from "../state-planning/plan-component-state.js";
 import { SurveyCancelledError } from "./events.js";
 import { jsonValueSchema, parseSurveyRun, type SurveyConfigSnapshotV1, type SurveyGitSnapshotV1, type SurveyRunV1 } from "./schema/survey-run.js";
@@ -18,6 +19,7 @@ export type SurveySelectionRequest =
   | { readonly kind: "all" }
   | { readonly kind: "path"; readonly path: string }
   | { readonly kind: "since"; readonly ref: string }
+  | { readonly kind: "interactive"; readonly componentIds: readonly string[]; readonly stateIds?: readonly string[] }
   | { readonly kind: "programmatic"; readonly componentIds: readonly string[]; readonly stateIds?: readonly string[]; readonly checkIds?: readonly string[] };
 
 export interface RunSurveyOptions {
@@ -31,24 +33,27 @@ export interface RunSurveyOptions {
   readonly mountTimeoutMs?: number;
   readonly bundle?: BuildLintReportOptions["bundle"];
   readonly launch?: BuildLintReportOptions["launch"];
+  /** Pre-resolved before the formal run boundary by interactive orchestration. */
+  readonly preparedScan?: ResolvedSurveyScan;
+  readonly scanPolicyOverride?: SurveyScanPolicy;
 }
 
 export async function runSurvey(options: RunSurveyOptions): Promise<SurveyRunV1> {
   if (options.signal?.aborted === true) throw new SurveyCancelledError();
   const selection = options.selection ?? { kind: "all" };
   const config = options.config;
-  const scanPolicy = config.survey.scan.nonInteractive;
+  const scanPolicy = options.scanPolicyOverride ?? config.survey.scan.nonInteractive;
   const scanOptions = { root: config.project.root, sourceDirectory: config.project.sourceDirectory, ignorePatterns: config.ignorePatterns };
-  const scan = applySurveyScanPolicy(inspectScanState(scanOptions), { ...scanOptions, policy: scanPolicy });
+  const scan = options.preparedScan ?? applySurveyScanPolicy(inspectScanState(scanOptions), { ...scanOptions, policy: scanPolicy });
   const mode = toLintMode(selection);
   const resolvedSelection = resolveSelectionFromModel({
     model: scan.model, root: config.project.root, sourceDirectory: config.project.sourceDirectory,
     cwd: options.cwd, ignorePatterns: config.ignorePatterns, mode,
   });
-  const explicitIds = selection.kind === "programmatic"
+  const explicitIds = selection.kind === "programmatic" || selection.kind === "interactive"
     ? validateIds(selection.componentIds, scan.model.components.map(({ id }) => id), "component")
     : [...(resolvedSelection.targetComponentIds ?? new Set(scan.model.components.map(({ id }) => id)))].sort();
-  const stateIds = selection.kind === "programmatic" ? selection.stateIds : undefined;
+  const stateIds = selection.kind === "programmatic" || selection.kind === "interactive" ? selection.stateIds : undefined;
   const checkIds = selection.kind === "programmatic" ? selection.checkIds : undefined;
   const configSnapshot = createConfigSnapshot(config, scanPolicy, options.maxStates ?? DEFAULT_MAX_STATES);
   const git = config.survey.git.capture ? captureGit(config.project.root) : undefined;

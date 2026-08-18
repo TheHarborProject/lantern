@@ -112,6 +112,7 @@ lantern survey src/components
 lantern survey --since origin/main
 lantern survey --name "before navbar refactor"
 lantern survey --no-save
+lantern survey --interactive
 lantern list surveys
 lantern show last
 lantern export last
@@ -137,6 +138,8 @@ Component discovery builds one canonical internal model and derives several proj
 `@timoogo/lantern/api` exposes `resolveProject`, `scan`, and `runSurvey`. The canonical result is the strict JSON-safe `SurveyRunV1` contract identified by `schema: "lantern-survey-run"` and `version: 1`. It includes immutable project, Git, targeting, execution-config, engine, diagnostic, standards, component, state, check, evidence, lifecycle, and summary facts. `renderSurveyRun` replays that value without reading source or scan state. The deprecated `runAudit` and `AuditWireDto v1` adapter remain available during the compatibility window.
 
 Completed, failed, and cancelled started surveys are saved locally by default in `.lantern/surveys`; CI defaults to no persistence and `--no-save` always disables it. History is project-scoped and supports full IDs, unique prefixes, and `last`. The stored and exported JSON are the same validated `SurveyRunV1` representation. Configure history under `survey.history` with `path`, optional `maxRuns`, optional `maxAge` (for example `30d`), and `listMax`. Relative paths resolve from the project root; an explicitly configured absolute path is treated as user-authorized external storage and is never searched globally.
+
+`lantern survey -i` is a lightweight keyboard-driven pre-survey selector for components and, optionally, their canonically planned states. It requires an interactive terminal, rejects path and `--since` targeting, confirms the resolved plan by default, and then uses the same survey and history pipeline as every other survey. Configure it with `survey.scan.interactive.missing` (`scan | error`), `survey.scan.interactive.stale` (`refresh | current | prompt | error`), `survey.interactive.defaultSelection` (`all | changed | previous`), and `survey.interactive.confirm`. Defaults are `scan`, `prompt`, `all`, and `true`. `previous` reads the latest project SurveyRun targeting; it creates no separate selection store.
 
 `lantern/keyboard-access` currently verifies one deliberately narrow property: whether rendered interactive output participates in the sequential keyboard focus order, or is correctly excluded when natively disabled. It does not claim to verify activation keys, custom keyboard handlers, focus-order quality, focus traps, or complete keyboard operability.
 

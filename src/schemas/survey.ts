@@ -5,9 +5,17 @@ export const surveyConfigSchema = z
     scan: z
       .object({
         nonInteractive: z.enum(["refresh", "current", "error"]).default("refresh"),
+        interactive: z.object({
+          missing: z.enum(["scan", "error"]).default("scan"),
+          stale: z.enum(["refresh", "current", "prompt", "error"]).default("prompt"),
+        }).strict().default({ missing: "scan", stale: "prompt" }),
       })
       .strict()
-      .default({ nonInteractive: "refresh" }),
+      .default({ nonInteractive: "refresh", interactive: { missing: "scan", stale: "prompt" } }),
+    interactive: z.object({
+      defaultSelection: z.enum(["all", "changed", "previous"]).default("all"),
+      confirm: z.boolean().default(true),
+    }).strict().default({ defaultSelection: "all", confirm: true }),
     persistence: z
       .object({
         local: z.boolean().default(true),
@@ -33,7 +41,8 @@ export const surveyConfigSchema = z
   })
   .strict()
   .default({
-    scan: { nonInteractive: "refresh" },
+    scan: { nonInteractive: "refresh", interactive: { missing: "scan", stale: "prompt" } },
+    interactive: { defaultSelection: "all", confirm: true },
     persistence: { local: true, ci: false },
     git: { capture: true },
     history: { path: ".lantern/surveys", listMax: 20 },
@@ -41,3 +50,6 @@ export const surveyConfigSchema = z
 
 export type SurveyConfig = z.infer<typeof surveyConfigSchema>;
 export type SurveyScanPolicy = SurveyConfig["scan"]["nonInteractive"];
+export type InteractiveMissingScanPolicy = SurveyConfig["scan"]["interactive"]["missing"];
+export type InteractiveStaleScanPolicy = SurveyConfig["scan"]["interactive"]["stale"];
+export type InteractiveDefaultSelection = SurveyConfig["interactive"]["defaultSelection"];

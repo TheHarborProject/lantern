@@ -22,11 +22,16 @@ export { resolveSurveyRun, limitSurveyRuns, displaySurveyId } from "./history/ca
 export { applyRetention, parseDuration } from "./history/retention.js";
 export { resolveSurveyHistoryOptions } from "./history/path.js";
 export { createSurveyHistorySink, listProjectSurveyRuns, resolveProjectSurveyRun, readProjectSurveyRun, exportSurveyRun, deleteProjectSurveyRun } from "./history/service.js";
+export { buildSelectableComponents } from "./interactive/planning.js";
+export { resolveInteractiveDefaults, toggleAllComponents, updateSelectedComponents, validateInteractiveSelection, selectedStateCount } from "./interactive/selection.js";
+export { resolveInteractiveScan } from "./interactive/scan-policy.js";
+export { prepareInteractiveSurvey } from "./interactive/workflow.js";
 export type { AuditRequest, ProjectRequest, SurveyRequest } from "./api/service.js";
 export type { SurveyRunV1, SurveyConfigSnapshotV1, SurveyDiagnosticV1, SurveyGitSnapshotV1, SurveyProjectSnapshotV1, SurveyTargetingSnapshotV1 } from "./survey/schema/survey-run.js";
 export type { SurveyEvent, SurveyEventSink } from "./survey/events.js";
 export type { SurveyRunSink } from "./survey/persistence.js";
 export type { SurveyHistoryListing, SurveyHistoryOptions, SurveyHistoryProblem, SurveyHistoryProblemKind, RetentionResult } from "./history/types.js";
+export type { InteractiveSurveySelection, InteractiveStateSelection, InteractiveSurveyPrompter, SelectableComponent, SelectableState, ResolvedInteractiveScan } from "./interactive/types.js";
 export type {
   AuditWireCheck,
   AuditWireComponent,

@@ -11,10 +11,13 @@ import { registerExportCommand } from "./commands/export.js";
 import { registerDeleteCommand } from "./commands/delete.js";
 import type { DeleteConfirmation } from "./commands/delete.js";
 import type { SurveyRunSink } from "../survey/persistence.js";
+import type { InteractiveSurveyPrompter } from "../interactive/types.js";
 
 export interface CreateProgramOptions {
   readonly deleteConfirmation?: DeleteConfirmation;
   readonly surveySink?: SurveyRunSink;
+  readonly interactivePrompter?: InteractiveSurveyPrompter;
+  readonly isInteractiveTerminal?: () => boolean;
 }
 
 /** Build the Lantern CLI program. */
@@ -38,6 +41,7 @@ Examples:
   lantern scan
   lantern scan --all
   lantern survey
+  lantern survey --interactive
   lantern survey src/components
   lantern list surveys
   lantern show last
@@ -50,7 +54,7 @@ Examples:
   registerInitCommand(program);
   registerLintCommand(program);
   registerScanCommand(program);
-  registerSurveyCommand(program, options.surveySink);
+  registerSurveyCommand(program, { sink: options.surveySink, interactivePrompter: options.interactivePrompter, isInteractiveTerminal: options.isInteractiveTerminal });
   registerListCommand(program);
   registerShowCommand(program);
   registerExportCommand(program);
