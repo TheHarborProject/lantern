@@ -9,8 +9,8 @@ import type { ResolvedLanternConfig } from "../../types/config.js";
  *   promise of automated proof;
  * - the Lantern-owned `static` and `rendered` engines enabled (RFC-008);
  *   third-party engines (`axe`, `lighthouse`) stay opt-in;
- * - no rules enabled by default — rules are opted into via `extends`
- *   (e.g. `lantern:recommended`) or listed explicitly;
+ * - the base object contains no fixed rule map because stable defaults are
+ *   derived from the selected standards by `resolveLanternConfig`;
  * - no fixtures declared by default (RFC-006) — fixtures are reusable named
  *   value lists a project defines only once it needs them.
  *

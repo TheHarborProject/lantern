@@ -1,5 +1,5 @@
 import { KNOWN_STANDARDS, type Standard } from "../schemas/standards.js";
-import type { Severity } from "../schemas/rules.js";
+import type { RulesConfig, Severity } from "../schemas/rules.js";
 import type { GeneratedState } from "../state-planning/types.js";
 import type { AccessibilityComponent, CanonicalComponent } from "../types/component-scan.js";
 import type { EngineCapability, PlannedCheck } from "./types.js";
@@ -23,6 +23,8 @@ export interface LanternRuleDefinition {
   readonly requiredCapability: EngineCapability;
   /** Standards (RFC-005 evaluation contexts) this rule's evidence maps to. */
   readonly standards: readonly Standard[];
+  /** Stable rules with a default severity participate in standard-derived activation. */
+  readonly defaultSeverity?: Exclude<Severity, "off"> | undefined;
   readonly plan: (input: RulePlanInput) => readonly PlannedCheck[];
 }
 
@@ -63,6 +65,7 @@ const accessibleNameRule: LanternRuleDefinition = {
   ruleId: "lantern/accessible-name",
   requiredCapability: "static-evidence",
   standards: ALL_STANDARDS,
+  defaultSeverity: "error",
   plan(input) {
     if (!input.accessibility.interactivity.focusable) {
       return [];
@@ -82,6 +85,7 @@ const keyboardAccessRule: LanternRuleDefinition = {
   ruleId: "lantern/keyboard-access",
   requiredCapability: "rendered-dom",
   standards: ALL_STANDARDS,
+  defaultSeverity: "error",
   plan(input) {
     if (!input.accessibility.interactivity.focusable) {
       return [];
@@ -130,4 +134,16 @@ export const LANTERN_RULES: readonly LanternRuleDefinition[] = [
 /** Standards each known rule maps to, indexed for report assembly (RFC-008). */
 export function ruleStandardsIndex(): ReadonlyMap<string, ReadonlySet<Standard>> {
   return new Map(LANTERN_RULES.map((rule) => [rule.ruleId, new Set(rule.standards)]));
+}
+
+/** Build the stable default rule policy supported by at least one selected standard. */
+export function defaultRulesForStandards(standards: readonly Standard[]): RulesConfig {
+  const selected = new Set(standards);
+  const defaults: RulesConfig = {};
+  for (const rule of LANTERN_RULES) {
+    if (rule.defaultSeverity !== undefined && rule.standards.some((standard) => selected.has(standard))) {
+      defaults[rule.ruleId] = rule.defaultSeverity;
+    }
+  }
+  return defaults;
 }

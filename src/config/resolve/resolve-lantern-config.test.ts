@@ -14,7 +14,10 @@ describe("resolveLanternConfig", () => {
       extends: [],
       engines: { static: true, rendered: true, axe: false, lighthouse: false },
       settings: {},
-      rules: {},
+      rules: {
+        "lantern/accessible-name": "error",
+        "lantern/keyboard-access": "error",
+      },
       components: {},
       overrides: [],
       ignorePatterns: [],
@@ -26,6 +29,28 @@ describe("resolveLanternConfig", () => {
     const raw = configSchema.parse({ project: {}, standards: ["wcag22-aa", "rgaa4.1"] });
 
     expect(resolveLanternConfig(raw).standards).toEqual(["wcag22-aa", "rgaa4.1"]);
+  });
+
+  it("derives the same stable defaults for another compatible supported standard", () => {
+    const resolved = resolveLanternConfig(configSchema.parse({ project: {}, standards: ["wcag21-aa"] }));
+
+    expect(resolved.rules).toEqual({
+      "lantern/accessible-name": "error",
+      "lantern/keyboard-access": "error",
+    });
+  });
+
+  it("lets explicit rule configuration override standard-derived activation", () => {
+    const resolved = resolveLanternConfig(configSchema.parse({
+      project: {},
+      rules: { "lantern/accessible-name": "off", "lantern/color-contrast": "warn" },
+    }));
+
+    expect(resolved.rules).toEqual({
+      "lantern/accessible-name": "off",
+      "lantern/keyboard-access": "error",
+      "lantern/color-contrast": "warn",
+    });
   });
 
   it("resolves configured output mode over the compact default", () => {

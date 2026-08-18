@@ -24,8 +24,9 @@ export type RawConfig = z.infer<typeof configSchema>;
 /**
  * Fully resolved RFC-005 accessibility configuration.
  *
- * Produced by layering, in this order: Lantern defaults, `extends` presets (in
- * declared order), then the top-level project configuration. Every field is
+ * Produced by layering, in this order: Lantern defaults plus stable rules
+ * derived from selected standards, `extends` presets (in declared order), then
+ * the top-level project configuration. Every field is
  * populated. `overrides` are kept as an ordered list so per-target rule
  * resolution can apply matching overrides deterministically at lint time.
  */
