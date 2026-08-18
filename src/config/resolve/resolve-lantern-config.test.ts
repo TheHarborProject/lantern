@@ -23,7 +23,8 @@ describe("resolveLanternConfig", () => {
       ignorePatterns: [],
       fixtures: {},
       survey: {
-        scan: { nonInteractive: "refresh" },
+        scan: { nonInteractive: "refresh", interactive: { missing: "scan", stale: "prompt" } },
+        interactive: { defaultSelection: "all", confirm: true },
         persistence: { local: true, ci: false },
         git: { capture: true },
         history: { path: ".lantern/surveys", listMax: 20 },

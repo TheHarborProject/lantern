@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createProgram } from "../program.js";
+import type { InteractiveSurveyPrompter } from "../../interactive/types.js";
+import type { SurveyRunV1 } from "../../survey/schema/survey-run.js";
 
 describe("lantern survey", () => {
   let root: string;
@@ -49,5 +51,50 @@ describe("lantern survey", () => {
     await program.parseAsync(["survey", "Button.tsx", "--since", "HEAD"], { from: "user" });
     expect(error).toHaveBeenCalledWith(expect.stringContaining("Cannot combine"));
     expect(process.exitCode).toBe(2);
+  });
+
+  it("runs interactive selection through the canonical survey and persistence path", async () => {
+    const runs: SurveyRunV1[] = [];
+    const prompter: InteractiveSurveyPrompter = {
+      chooseStaleScan: () => Promise.resolve("refresh"),
+      chooseComponents: (components) => Promise.resolve([components[0]?.id ?? ""]),
+      refineStates: (components, selection) => Promise.resolve({ componentIds: selection.componentIds, states: { kind: "restricted", ids: [components[0]?.states[0]?.id ?? ""] } }),
+      confirmPlan: () => Promise.resolve("start"),
+    };
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const program = createProgram({ interactivePrompter: prompter, isInteractiveTerminal: () => true, surveySink: { save: (run) => { runs.push(run); return Promise.resolve(); } } });
+    program.exitOverride();
+    await program.parseAsync(["survey", "-i", "--name", "chosen", "--minimal"], { from: "user" });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ name: "chosen", targeting: { source: "interactive", componentIds: ["Button.tsx#Button"] } });
+    expect(runs[0]?.targeting.stateIds).toHaveLength(1);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("Components"));
+  });
+
+  it("fails non-TTY and conflicting targeting before creating a run", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    let program = createProgram({ isInteractiveTerminal: () => false }); program.exitOverride();
+    await program.parseAsync(["survey", "-i"], { from: "user" });
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("requires an interactive"));
+    process.exitCode = undefined;
+    program = createProgram({ isInteractiveTerminal: () => true }); program.exitOverride();
+    await program.parseAsync(["survey", "-i", "Button.tsx"], { from: "user" });
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("cannot be combined"));
+  });
+
+  it("creates no run on pre-run cancellation and honors --no-save", async () => {
+    const saved: SurveyRunV1[] = [];
+    const cancelled: InteractiveSurveyPrompter = {
+      chooseStaleScan: () => Promise.resolve("refresh"), chooseComponents: () => Promise.resolve(null),
+      refineStates: (_components, selection) => Promise.resolve(selection), confirmPlan: () => Promise.resolve("start"),
+    };
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    let program = createProgram({ interactivePrompter: cancelled, isInteractiveTerminal: () => true, surveySink: { save: (run) => { saved.push(run); return Promise.resolve(); } } }); program.exitOverride();
+    await program.parseAsync(["survey", "-i"], { from: "user" });
+    expect(saved).toHaveLength(0);
+    const start: InteractiveSurveyPrompter = { ...cancelled, chooseComponents: (components) => Promise.resolve(components.map(({ id }) => id)) };
+    program = createProgram({ interactivePrompter: start, isInteractiveTerminal: () => true, surveySink: { save: (run) => { saved.push(run); return Promise.resolve(); } } }); program.exitOverride();
+    await program.parseAsync(["survey", "-i", "--no-save", "--minimal"], { from: "user" });
+    expect(saved).toHaveLength(0);
   });
 });
