@@ -33,6 +33,29 @@ export interface ResolveLintTargetsOptions {
   readonly mode: LintTargetMode;
 }
 
+export interface ResolveSelectionFromModelOptions {
+  readonly model: CanonicalComponentModel;
+  readonly root: string;
+  readonly sourceDirectory?: string | undefined;
+  readonly cwd?: string | undefined;
+  readonly ignorePatterns: readonly string[];
+  readonly mode: LintTargetMode;
+}
+
+/** Resolve only survey scope from an already-resolved scan; never refreshes discovery. */
+export function resolveSelectionFromModel(options: ResolveSelectionFromModelOptions): Omit<LintTargetSelection, "model" | "rescanned"> {
+  const { model, root, sourceDirectory = root, cwd = root, ignorePatterns, mode } = options;
+  const narrowed = mode.kind === "since"
+    ? computeSinceTargets(model, mode.ref, root, sourceDirectory, ignorePatterns)
+    : mode.kind === "path"
+      ? computePathTargets(model, mode.path, root, cwd)
+      : undefined;
+  return {
+    targetComponentIds: narrowed?.targetComponentIds,
+    selection: narrowed?.selection ?? { kind: "all" },
+  };
+}
+
 /**
  * Resolve which components `lantern lint` should process (RFC-007), reusing
  * the single RFC-002/RFC-004 discovery implementation — there is no
@@ -51,10 +74,9 @@ export interface ResolveLintTargetsOptions {
 export function resolveLintTargets(options: ResolveLintTargetsOptions): LintTargetSelection {
   const { root, sourceDirectory = root, cwd = root, ignorePatterns, mode } = options;
 
-  const { model, rescanned } =
-    mode.kind === "all"
-      ? forceRescan(root, sourceDirectory, ignorePatterns)
-      : incrementalScan(root, sourceDirectory, ignorePatterns);
+  const { model, rescanned } = mode.kind === "all"
+    ? forceRescan(root, sourceDirectory, ignorePatterns)
+    : incrementalScan(root, sourceDirectory, ignorePatterns);
 
   const narrowedSelection =
     mode.kind === "since"
@@ -96,16 +118,16 @@ function computePathTargets(
   };
 }
 
+function forceRescan(root: string, sourceDirectory: string, ignorePatterns: readonly string[]): { model: CanonicalComponentModel; rescanned: boolean } {
+  return { model: rescanAndPersist(root, sourceDirectory, ignorePatterns), rescanned: true };
+}
+
 function isDescendantOrSame(source: string, directory: string): boolean {
   if (directory === "") {
     return true;
   }
   const relativePath = relative(directory, source).split(sep).join("/");
   return relativePath !== "" && !relativePath.startsWith("..") && !relativePath.startsWith("/");
-}
-
-function forceRescan(root: string, sourceDirectory: string, ignorePatterns: readonly string[]): { model: CanonicalComponentModel; rescanned: boolean } {
-  return { model: rescanAndPersist(root, sourceDirectory, ignorePatterns), rescanned: true };
 }
 
 function incrementalScan(

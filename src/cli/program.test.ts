@@ -42,4 +42,11 @@ describe("createProgram", () => {
     expect(program.commands.map((command) => command.name())).toContain("init");
     expect(program.helpInformation()).toContain("init");
   });
+
+  it("registers scan and survey as canonical top-level commands", () => {
+    const program = createProgram();
+    expect(program.commands.map((command) => command.name())).toEqual(expect.arrayContaining(["scan", "survey"]));
+    expect(program.helpInformation()).toContain("scan");
+    expect(program.helpInformation()).toContain("survey");
+  });
 });

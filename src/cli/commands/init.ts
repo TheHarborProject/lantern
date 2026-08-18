@@ -32,7 +32,7 @@ export function registerInitCommand(program: Command): void {
         }
 
         console.log(`\n✓ Created ${relative(process.cwd(), result.configPath)}`);
-        console.log("\nRun `lantern lint` to audit your components.");
+        console.log("\nRun `lantern survey` to evaluate your components.");
       } catch (error) {
         if (error instanceof ConfigAlreadyExistsError) {
           console.log("Lantern is already configured for this project.");

@@ -22,6 +22,11 @@ describe("resolveLanternConfig", () => {
       overrides: [],
       ignorePatterns: [],
       fixtures: {},
+      survey: {
+        scan: { nonInteractive: "refresh" },
+        persistence: { local: true, ci: false },
+        git: { capture: true },
+      },
     });
   });
 

@@ -21,6 +21,7 @@ import type { Standard } from "../schemas/standards.js";
 import type { AccessibilityComponent, CanonicalComponent, CanonicalComponentModel } from "../types/component-scan.js";
 import type { ResolvedConfig } from "../types/config.js";
 import { resolveLintTargets } from "./resolve-lint-targets.js";
+import type { LintTargetSelection } from "./resolve-lint-targets.js";
 import type {
   CheckResult,
   ComponentReport,
@@ -51,6 +52,8 @@ export interface BuildLintReportOptions {
   readonly checkIds?: readonly string[] | undefined;
   readonly signal?: AbortSignal | undefined;
   readonly events?: AuditEventSink | undefined;
+  /** Pre-resolved by canonical survey orchestration; avoids hidden discovery. */
+  readonly preparedTargets?: LintTargetSelection | undefined;
 }
 
 /**
@@ -117,7 +120,7 @@ async function buildSuccessfulLintReport(options: BuildLintReportOptions, runId:
   const startedAt = Date.now();
   throwIfCancelled(options.signal);
 
-  const targets = resolveLintTargets({
+  const targets = options.preparedTargets ?? resolveLintTargets({
     root: config.project.root,
     sourceDirectory: config.project.sourceDirectory,
     cwd,
@@ -181,6 +184,8 @@ async function buildSuccessfulLintReport(options: BuildLintReportOptions, runId:
     await session.close();
   }
 
+  validateResolvedSelection(options, componentReports);
+
   // Standards (RFC-005) stay separate evaluation contexts: the same executed
   // evidence is filtered per standard via each rule's declared standard
   // mapping, never merged into one synthetic compliance result. Every known
@@ -222,6 +227,19 @@ async function buildSuccessfulLintReport(options: BuildLintReportOptions, runId:
     standards,
     summary: summarizePlanning(componentReports, Date.now() - startedAt),
   };
+}
+
+function validateResolvedSelection(options: BuildLintReportOptions, components: readonly ComponentReport[]): void {
+  if (options.stateIds !== undefined) {
+    const found = new Set(components.flatMap((component) => component.states.map((state) => state.stateId)));
+    const unknown = options.stateIds.filter((id) => !found.has(id));
+    if (unknown.length > 0) throw new LintSelectionError(`Unknown canonical state ID${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`);
+  }
+  if (options.checkIds !== undefined) {
+    const found = new Set(components.flatMap((component) => component.states.flatMap((state) => state.checks.map((check) => check.checkId))));
+    const unknown = options.checkIds.filter((id) => !found.has(id));
+    if (unknown.length > 0) throw new LintSelectionError(`Unknown canonical check ID${unknown.length === 1 ? "" : "s"}: ${unknown.join(", ")}`);
+  }
 }
 
 function indexAccessibility(model: CanonicalComponentModel): ReadonlyMap<string, AccessibilityComponent> {
@@ -597,9 +615,6 @@ function emptyAccessibility(component: CanonicalComponent): AccessibilityCompone
 }
 
 function validateSelection(options: BuildLintReportOptions, model: CanonicalComponentModel): ReadonlySet<string> | undefined {
-  if (options.stateIds !== undefined || options.checkIds !== undefined) {
-    throw new LintSelectionError("State/check ID selection is declared but not supported by RFC-009 execution; select canonical component IDs instead.");
-  }
   if (options.componentIds === undefined) return undefined;
   const known = new Set(model.components.map((component) => component.id));
   const unknown = options.componentIds.filter((id) => !known.has(id));

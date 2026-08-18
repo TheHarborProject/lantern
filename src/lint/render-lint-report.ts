@@ -2,20 +2,20 @@ import type { OutputMode } from "../schemas/output.js";
 import { createTerminalStyle, type TerminalStyle } from "../cli/terminal-style.js";
 import type { CheckResult, ComponentReport, EvidenceRecord, LintReport, ReportStatus, StateReport } from "./types.js";
 
-export interface RenderLintReportOptions { readonly mode?: OutputMode; readonly verbose?: boolean; readonly color?: boolean; }
+export interface RenderLintReportOptions { readonly mode?: OutputMode; readonly verbose?: boolean; readonly color?: boolean; readonly title?: string; }
 export const STATUS_ICON: Readonly<Record<ReportStatus, string>> = { pass: "✓", fail: "✗", review: "◌", skipped: "↷" };
 const STANDARD_LABELS: Readonly<Record<string, string>> = { "wcag22-aa": "WCAG 2.2 AA", "wcag21-aa": "WCAG 2.1 AA", "rgaa4.1": "RGAA 4.1" };
 
 export function renderLintReport(report: LintReport, options: RenderLintReportOptions = {}): string {
   const mode = options.mode ?? (options.verbose === true ? "verbose" : "compact");
   const style = createTerminalStyle(options.color === true);
-  const lines = mode === "minimal" ? renderSummary(report, style) : renderHuman(report, mode, style);
+  const lines = mode === "minimal" ? renderSummary(report, style) : renderHuman(report, mode, style, options.title ?? "Lantern lint");
   return `${lines.join("\n").replace(/\n+$/, "")}\n`;
 }
 
-function renderHuman(report: LintReport, mode: "compact" | "verbose", style: TerminalStyle): string[] {
+function renderHuman(report: LintReport, mode: "compact" | "verbose", style: TerminalStyle, title: string): string[] {
   const standards = report.standards.map((standard) => standardLabel(standard.standard)).join(", ") || "No standards";
-  const lines = [style.strong("Lantern lint"), "", `${style.accent(style.strong(" RUN "))} ${style.strong(standards)}`, ""];
+  const lines = [style.strong(title), "", `${style.accent(style.strong(" RUN "))} ${style.strong(standards)}`, ""];
   const targetLines = renderTargetDetails(report, style);
   if (targetLines.length > 0) lines.push(...targetLines, "");
   if (mode === "verbose") {
