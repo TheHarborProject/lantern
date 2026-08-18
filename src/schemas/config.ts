@@ -12,6 +12,7 @@ import { projectSchema } from "./project.js";
 import { rulesSchema } from "./rules.js";
 import { settingsSchema } from "./settings.js";
 import { standardsSchema } from "./standards.js";
+import { surveyConfigSchema } from "./survey.js";
 
 /**
  * Durable user-owned Lantern configuration (`lantern.config.json`).
@@ -40,6 +41,7 @@ export const configSchema = z
     ignorePatterns: ignorePatternsSchema.optional(),
     fixtures: fixturesSchema.optional(),
     output: outputSchema.optional(),
+    survey: surveyConfigSchema.optional(),
   })
   .strict();
 

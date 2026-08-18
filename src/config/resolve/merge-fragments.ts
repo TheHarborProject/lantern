@@ -6,6 +6,7 @@ import type { OutputConfig } from "../../schemas/output.js";
 import type { RulesConfig } from "../../schemas/rules.js";
 import type { SettingsConfig } from "../../schemas/settings.js";
 import type { StandardsConfig } from "../../schemas/standards.js";
+import type { SurveyConfig } from "../../schemas/survey.js";
 import type { ResolvedLanternConfig } from "../../types/config.js";
 
 /**
@@ -23,6 +24,7 @@ export interface ConfigFragment {
   readonly overrides?: OverridesConfig | undefined;
   readonly ignorePatterns?: readonly string[] | undefined;
   readonly fixtures?: FixturesConfig | undefined;
+  readonly survey?: SurveyConfig | undefined;
 }
 
 function mergeComponentConfig(base: ComponentConfig, next: ComponentConfig): ComponentConfig {
@@ -77,5 +79,6 @@ export function mergeFragment(base: ResolvedLanternConfig, next: ConfigFragment)
     overrides: [...base.overrides, ...(next.overrides ?? [])],
     ignorePatterns: [...(next.ignorePatterns ?? base.ignorePatterns)],
     fixtures: { ...base.fixtures, ...next.fixtures },
+    survey: next.survey ?? base.survey,
   };
 }

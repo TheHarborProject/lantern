@@ -33,7 +33,7 @@ export function registerLintCommand(program: Command): void {
     .command("lint")
     .argument("[path]", "Limit linting to components sourced from a file or directory")
     .description("Run Lantern's accessibility lint workflow across discovered components.")
-    .option("--all", "Process every discovered component, forcing a full rescan")
+    .option("--all", "Process every known component (the survey default)")
     .option("--since <ref>", "Target components changed since the given Git ref")
     .option("--verbose", "Show actionable diagnostics, state props, provenance, and evidence")
     .option("--minimal", "Show only the final summary")
@@ -88,6 +88,8 @@ Examples:
           return;
         }
 
+        console.error('Warning: "lantern lint" is deprecated; use "lantern survey".');
+
         if (options.configure === true) {
           await runConfigure(config.configFilePath, report);
           return;
@@ -132,7 +134,7 @@ function resolveTargetMode(options: LintCommandOptions, targetPath: string | und
     return { kind: "since", ref: options.since };
   }
   if (options.all === true) {
-    return { kind: "all" };
+    return { kind: "incremental" };
   }
   return { kind: "incremental" };
 }

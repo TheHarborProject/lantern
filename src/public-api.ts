@@ -11,9 +11,15 @@
  * not a versioned contract — its shape can change between any two RFC-009.x
  * releases without notice. Do not treat it as equivalent to the wire DTO.
  */
-export { discoverComponents, resolveProject, runAudit } from "./api/service.js";
+export { discoverComponents, resolveProject, runAudit, runSurvey, scan } from "./api/service.js";
 export { auditWireSchema, toAuditWireDto } from "./api/wire.js";
-export type { AuditRequest, ProjectRequest } from "./api/service.js";
+export { surveyRunV1Schema, parseSurveyRun } from "./survey/schema/survey-run.js";
+export { renderSurveyRun } from "./survey/render-survey-run.js";
+export { shouldPersistSurveyRun, deliverSurveyRun } from "./survey/persistence.js";
+export type { AuditRequest, ProjectRequest, SurveyRequest } from "./api/service.js";
+export type { SurveyRunV1, SurveyConfigSnapshotV1, SurveyDiagnosticV1, SurveyGitSnapshotV1, SurveyProjectSnapshotV1, SurveyTargetingSnapshotV1 } from "./survey/schema/survey-run.js";
+export type { SurveyEvent, SurveyEventSink } from "./survey/events.js";
+export type { SurveyRunSink } from "./survey/persistence.js";
 export type {
   AuditWireCheck,
   AuditWireComponent,

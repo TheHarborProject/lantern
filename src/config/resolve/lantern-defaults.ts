@@ -27,4 +27,9 @@ export const LANTERN_DEFAULTS: ResolvedLanternConfig = {
   overrides: [],
   ignorePatterns: [],
   fixtures: {},
+  survey: {
+    scan: { nonInteractive: "refresh" },
+    persistence: { local: true, ci: false },
+    git: { capture: true },
+  },
 };

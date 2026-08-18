@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { LintReport } from "../lint/types.js";
+import type { SurveyRunV1 } from "../survey/schema/survey-run.js";
 
 /**
  * Wire v1 (RFC-009/009.1): the versioned, external contract for a
@@ -212,7 +213,8 @@ export type AuditWireDto = z.infer<typeof auditWireSchema>;
  * shape (see the module doc above) rather than trusting the internal
  * `LintReport` shape by construction.
  */
-export function toAuditWireDto(report: LintReport): AuditWireDto {
+export function toAuditWireDto(value: LintReport | SurveyRunV1): AuditWireDto {
+  const report = "schema" in value ? toLegacyLintReport(value) : value;
   return auditWireSchema.parse({
     version: 1,
     run: {
@@ -229,4 +231,33 @@ export function toAuditWireDto(report: LintReport): AuditWireDto {
     standards: report.standards,
     summary: report.summary,
   });
+}
+
+/** @deprecated Compatibility-only view for RFC-009 consumers. */
+export function toLegacyLintReport(run: SurveyRunV1): LintReport {
+  const mode = run.targeting.source === "path"
+    ? { kind: "path" as const, path: run.targeting.path ?? "." }
+    : run.targeting.source === "since"
+      ? { kind: "since" as const, ref: run.targeting.ref ?? "" }
+      : { kind: "all" as const };
+  return {
+    version: 3,
+    runId: run.id,
+    startedAt: run.startedAt,
+    finishedAt: run.finishedAt,
+    status: run.status,
+    generatedAt: run.startedAt,
+    targeting: { mode, rescanned: run.targeting.scan.refreshed, selection: { kind: "all" } },
+    provider: run.engines.length === 0
+      ? { kind: "unavailable", reason: "no engines were enabled" }
+      : { kind: "available", provider: run.engines.map((engine) => `${engine.id}@${engine.version}`).join(", ") },
+    engines: run.engines,
+    config: {
+      standards: run.config.standards,
+      rules: Object.fromEntries(Object.entries(run.config.rules).map(([id, rule]) => [id, rule.severity])),
+    },
+    diagnostics: run.diagnostics,
+    standards: run.standards,
+    summary: run.summary,
+  };
 }

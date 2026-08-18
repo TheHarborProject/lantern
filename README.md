@@ -105,7 +105,13 @@ execute a repository's scripts.
 Build the regenerable component index from TypeScript and TSX sources under `project.root`:
 
 ```bash
-lantern audit scan
+lantern scan
+lantern scan --all
+lantern survey
+lantern survey src/components
+lantern survey --since origin/main
+lantern survey --name "before navbar refactor"
+lantern survey --no-save
 ```
 
 Component discovery builds one canonical internal model and derives several projections from it — sources are never scanned separately per view:
@@ -122,9 +128,9 @@ Component discovery builds one canonical internal model and derives several proj
 - `cache/component-scan.json` is the exhaustive machine-readable model. Every prop is resolved (including inherited DOM/React props) and tagged with its `origin` (`declared` vs `inherited`) and portable `provenance`.
 - `accessibility.json` derives accessibility-oriented facts — native/derived semantics, focusability, accessible-name sources, ARIA/state props, and whether runtime analysis may be required. It describes the target component and encodes no rule catalog specific to any accessibility engine.
 
-## Programmatic audit API
+## Programmatic survey API
 
-`@timoogo/lantern/api` exposes the narrow RFC-009 service boundary: `resolveProject`, `discoverComponents`, `runAudit`, and explicit conversion to the versioned JSON-safe audit DTO. Audit requests may select canonical component IDs and observe typed lifecycle events without depending on Commander or parsing terminal output. State/check selectors are reserved by the request model and currently reject with a structured failed run instead of being ignored.
+`@timoogo/lantern/api` exposes `resolveProject`, `scan`, and `runSurvey`. The canonical result is the strict JSON-safe `SurveyRunV1` contract identified by `schema: "lantern-survey-run"` and `version: 1`. It includes immutable project, Git, targeting, execution-config, engine, diagnostic, standards, component, state, check, evidence, lifecycle, and summary facts. `renderSurveyRun` replays that value without reading source or scan state. The deprecated `runAudit` and `AuditWireDto v1` adapter remain available during the compatibility window.
 
 `lantern/keyboard-access` currently verifies one deliberately narrow property: whether rendered interactive output participates in the sequential keyboard focus order, or is correctly excluded when natively disabled. It does not claim to verify activation keys, custom keyboard handlers, focus-order quality, focus traps, or complete keyboard operability.
 

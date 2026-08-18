@@ -9,6 +9,7 @@ import type { RulesConfig } from "../schemas/rules.js";
 import type { SettingsConfig } from "../schemas/settings.js";
 import type { StandardsConfig } from "../schemas/standards.js";
 import type { OutputConfig } from "../schemas/output.js";
+import type { SurveyConfig } from "../schemas/survey.js";
 
 /**
  * Raw configuration: direct result of Zod validation.
@@ -41,6 +42,7 @@ export interface ResolvedLanternConfig {
   readonly overrides: OverridesConfig;
   readonly ignorePatterns: readonly string[];
   readonly fixtures: FixturesConfig;
+  readonly survey: SurveyConfig;
 }
 
 /**
