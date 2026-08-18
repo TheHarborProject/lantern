@@ -21,12 +21,22 @@ export const surveyConfigSchema = z
       })
       .strict()
       .default({ capture: true }),
+    history: z
+      .object({
+        path: z.string().trim().min(1).default(".lantern/surveys"),
+        maxRuns: z.number().int().positive().optional(),
+        maxAge: z.string().regex(/^[1-9]\d*(?:m|h|d|w)$/, "Expected a positive duration such as 30d.").optional(),
+        listMax: z.number().int().positive().default(20),
+      })
+      .strict()
+      .default({ path: ".lantern/surveys", listMax: 20 }),
   })
   .strict()
   .default({
     scan: { nonInteractive: "refresh" },
     persistence: { local: true, ci: false },
     git: { capture: true },
+    history: { path: ".lantern/surveys", listMax: 20 },
   });
 
 export type SurveyConfig = z.infer<typeof surveyConfigSchema>;
