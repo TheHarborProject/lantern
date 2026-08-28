@@ -1,4 +1,12 @@
-# Lantern
+<p align="center">
+  <img src="assets/lantern.png" alt="Lantern logo" width="180">
+</p>
+
+<h1 align="center">Lantern</h1>
+
+<p align="center">
+  Accessible component auditing from the command line.
+</p>
 
 Lantern is a TypeScript CLI for auditing the accessibility of web components in a real browser. This repository currently contains the reusable foundation: command-line conventions, Zod configuration, environment handling, application lifecycle helpers, and Playwright integration.
 
